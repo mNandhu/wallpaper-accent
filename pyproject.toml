@@ -1,0 +1,20 @@
+[project]
+name = "wallpaper-accent"
+version = "0.1.0"
+description = "Theme terminal tools from the macOS desktop wallpaper's accent color."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["materialyoucolor>=3.0.2"]
+
+# The launchd agent runs ./wallpaper-accent.py via `uv run --script`, which uses
+# that file's PEP-723 metadata (kept in sync with the dependency above). This
+# console entry is for `uv tool install .` / running it as a real CLI.
+[project.scripts]
+wallpaper-accent = "wallpaper_accent.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wallpaper_accent"]

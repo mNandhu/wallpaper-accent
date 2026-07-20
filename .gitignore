@@ -1,1 +1,17 @@
-# generated output lives in ~/.local/state/wallpaper-accent/, not here
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# uv / virtualenv
+.venv/
+uv.lock
+
+# tool caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# generated theme output lives in ~/.local/state/wallpaper-accent/, not here

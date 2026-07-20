@@ -20,8 +20,12 @@ Engineering/extension reference: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ```
 ~/.config/wallpaper-accent/          <- this git repo
-  wallpaper-accent.py                <- the engine (core + emitters + reloads)
+  wallpaper-accent.py                <- thin shim the launchd agent runs
+  pyproject.toml  .python-version    <- deps + console entry
   README.md  ARCHITECTURE.md
+  src/wallpaper_accent/              <- the engine (a Python package)
+    config.py palette.py cli.py ...  <- core + shared helpers
+    components/                      <- one module per tool (ghostty, fzf, ...)
 ~/.local/state/wallpaper-accent/     <- generated output (not in the repo)
   colors.json      <- shared palette (source of truth)
   ghostty.conf  fzf.env  p10k-accent.zsh  zsh-syntax.zsh
@@ -29,8 +33,10 @@ Engineering/extension reference: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 ~/.config/nvim/lua/themes/wallpaper_accent.lua   <- generated (must be in nvim rtp)
 ```
 
-Architecture: one core extracts the accent → `colors.json`; per-app emitters
-render fragments; per-app reload hooks apply them.
+Architecture: one core extracts the accent → `colors.json`; each tool is a
+**component** (`src/wallpaper_accent/components/<tool>.py`) that renders its
+fragment and, if it can, reloads running instances. See
+[`ARCHITECTURE.md`](./ARCHITECTURE.md) to add or extend one.
 
 ---
 
@@ -104,6 +110,15 @@ cat ~/.local/state/wallpaper-accent/run.log
 ~/.config/wallpaper-accent/wallpaper-accent.py --show
 launchctl print gui/$(id -u)/com.kmurthi.wallpaper-accent | grep -iE 'state|runs|last exit'
 ```
+
+### Enable / disable a tool
+Edit `DEFAULT_COMPONENTS` in `src/wallpaper_accent/config.py`, or for one run:
+```bash
+# only these:
+WALLPAPER_ACCENT_COMPONENTS="ghostty,fzf" ~/.config/wallpaper-accent/wallpaper-accent.py --force
+```
+Known components: `ghostty, fzf, p10k, zsh-syntax, nvim`. Adding a new one:
+see [`ARCHITECTURE.md`](./ARCHITECTURE.md) ("Add a new tool").
 
 ### Revert an app
 - nvim: set `M.base46.theme` back to `"onedark"` in `~/.config/nvim/lua/chadrc.lua`.

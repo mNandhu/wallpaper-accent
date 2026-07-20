@@ -6,9 +6,11 @@ constraints, contracts, the "add a tool" recipe, and the environment traps that
 bite if you skip them.
 
 Repo: `~/.config/wallpaper-accent/` (standalone git repo, independent of the
-`~/layers` dotfiles). Engine: `wallpaper-accent.py` (one self-contained file, run
-via `uv` with PEP-723 inline deps). Designed to grow into a CLI: the core →
-`colors.json` → emitters split means new subcommands/tools are additive.
+`~/layers` dotfiles). The engine is a Python package under `src/wallpaper_accent/`
+(run via `uv`); the repo-root `wallpaper-accent.py` is a thin PEP-723 shim the
+launchd agent/shebang execute. Core → `colors.json` → per-tool **components**, so
+adding or disabling a tool is a one-file change; `pyproject.toml` already declares
+a `wallpaper-accent` console entry for growing into a CLI.
 
 ---
 
@@ -68,23 +70,33 @@ flowchart LR
 
 ---
 
-## File map
+## Package layout
 
-| Path | Kind | In repo? |
-|---|---|---|
-| `~/.config/wallpaper-accent/wallpaper-accent.py` | engine | ✅ |
-| `~/.config/wallpaper-accent/{README,ARCHITECTURE}.md` | docs | ✅ |
-| `~/.local/state/wallpaper-accent/colors.json` | generated palette (truth) | no |
-| `…/wallpaper-accent/ghostty.conf` | ghostty fragment (included by `config.local`) | no |
-| `…/wallpaper-accent/fzf.env` | fzf `--color` opts | no |
-| `…/wallpaper-accent/p10k-accent.zsh` | p10k overrides | no |
-| `…/wallpaper-accent/zsh-syntax.zsh` | F-Sy-H `FAST_HIGHLIGHT_STYLES` | no |
-| `…/wallpaper-accent/state.json`, `run.log` | idempotency + agent log | no |
-| `~/.config/nvim/lua/themes/wallpaper_accent.lua` | NvChad theme (must be in nvim rtp) | no |
+```
+~/.config/wallpaper-accent/            # standalone git repo
+  wallpaper-accent.py                  # thin PEP-723 shim -> src (launchd runs this)
+  pyproject.toml  .python-version      # deps (materialyoucolor) + console entry
+  README.md  ARCHITECTURE.md
+  src/wallpaper_accent/
+    config.py       # paths, tint/scheme knobs, CATPPUCCIN, DEFAULT_COMPONENTS
+    util.py         # log, atomic_write, rgb
+    procs.py        # ps-based pids() + signal_all()  (pgrep is unreliable here)
+    wallpaper.py    # find_wallpaper(), is_dark_appearance()
+    palette.py      # build_palette(image, dark) -> pal
+    show.py         # show_palette()  (--show swatches)
+    cli.py          # main(): argparse + orchestration
+    components/
+      __init__.py   # Component dataclass, REGISTRY, enabled()
+      ghostty.py fzf.py p10k.py zsh_syntax.py nvim.py   # emit() [+ reload()]
+```
+
+Generated output (NOT in the repo) under `~/.local/state/wallpaper-accent/`:
+`colors.json` (palette, source of truth), `ghostty.conf`, `fzf.env`,
+`p10k-accent.zsh`, `zsh-syntax.zsh`, `state.json`, `run.log`. Plus
+`~/.config/nvim/lua/themes/wallpaper_accent.lua` (must be in nvim's runtimepath).
 
 **Integration points (machine-local, edited once):**
-- `~/.config/ghostty/config` → `config-file = ?config.local` → `config.local` →
-  `config-file = ?…/wallpaper-accent/ghostty.conf`
+- `~/.config/ghostty/config` → `?config.local` → `?…/wallpaper-accent/ghostty.conf`
 - `~/layers/30-local/.zshrc.local`: guarded `source` of `fzf.env` and
   `p10k-accent.zsh`; F-Sy-H loaded with `atload'… source zsh-syntax.zsh'`
 - `~/.config/nvim/lua/chadrc.lua` → `M.base46.theme = "wallpaper_accent"`
@@ -92,7 +104,6 @@ flowchart LR
 - `~/Library/LaunchAgents/com.kmurthi.wallpaper-accent.plist`
 
 ---
-
 ## The palette contract
 
 `build_palette()` returns `pal` (mirrored to `colors.json`):
@@ -131,37 +142,36 @@ emitter honors this (e.g. `emit_zsh_syntax` uses only base16, never the accent).
 
 ---
 
-## Function inventory (`wallpaper-accent.py`)
+## Module map
 
-| Symbol | ~Line | Role |
-|---|---|---|
-| constants | 39–81 | paths, tint/scheme knobs, `CATPPUCCIN` |
-| `find_wallpaper` / `_wallpaper_from_index` / `_wallpaper_from_osascript` | 91/101/139 | wallpaper path (Index.plist → osascript → None) |
-| `is_dark_appearance` | 157 | `defaults read -g AppleInterfaceStyle` |
-| `build_palette` | 172 | **core**: image → `pal` (scheme, tinted neutrals, base16) |
-| `emit_ghostty` | 288 | → `OUT_CONF` |
-| `emit_fzf` | 317 | → `FZF_ENV` |
-| `emit_p10k` | 343 | → `P10K_ZSH` |
-| `emit_nvim` | 362 | → `NVIM_THEME` (NvChad base_16/base_30) |
-| `emit_zsh_syntax` | 427 | → `ZSH_SYNTAX` (`FAST_HIGHLIGHT_STYLES`, fixed hues) |
-| `emit_colors_json` | 477 | → `COLORS_JSON` (incl. `scheme`) |
-| `_pids` / `_signal` | 493/515 | **ps-based** pid lookup + signal |
-| `reload_ghostty` / `reload_nvim` | 528/533 | `SIGUSR2` / `SIGUSR1`-or-headless |
-| `atomic_write` | 558 | tmp + `os.replace` |
-| `_rgb` / `_swatch` / `show_palette` | 570/575/581 | `--show` truecolor swatches from colors.json |
-| `main` | 606 | argparse + pipeline |
+| Module | Responsibility |
+|---|---|
+| `config.py` | paths, tint/scheme knobs, `CATPPUCCIN`, `DEFAULT_COMPONENTS`, `enabled_component_names()` |
+| `util.py` | `log`, `atomic_write`, `rgb` |
+| `procs.py` | `pids(name)`, `signal_all(name, sig)` — **ps-based**, never pgrep |
+| `wallpaper.py` | `find_wallpaper()` (Index.plist → osascript → None), `is_dark_appearance()` |
+| `palette.py` | `build_palette(image, dark) -> pal` (**core**: scheme, tinted neutrals, base16) |
+| `show.py` | `show_palette()` — `--show` swatches from colors.json |
+| `cli.py` | `main()`: argparse, idempotency, `_write_colors_json`, orchestration |
+| `components/__init__.py` | `Component(name, emit, reload)`, `REGISTRY`, `enabled()` |
+| `components/<tool>.py` | `emit(pal)` writes the fragment; optional `reload()` applies it |
+
+Every emitter takes the same `pal` dict and writes via `atomic_write`; signal
+reloads go through `procs.signal_all(basename, sig)`.
 
 Flags: `--force`, `--no-reload`, `--print` (JSON), `--show` (swatches),
 `--image PATH`, `--dark`/`--light`.
 
----
+**Enable/disable a tool:** edit `config.DEFAULT_COMPONENTS`, or set
+`WALLPAPER_ACCENT_COMPONENTS="ghostty,fzf"` for a single run.
 
+---
 ## Reload taxonomy (pick one per tool)
 
 1. **Live via signal** — app re-reads on a signal. ghostty `SIGUSR2`, nvim
-   `SIGUSR1` autocmd. Use `_pids()`/`_signal()`.
+   `SIGUSR1` autocmd. Use `procs.pids()` / `procs.signal_all()`.
 2. **Live via CLI** — a command repaints a running instance (`tmux source-file`,
-   `kitty @ set-colors`). Shell out in `reload_<tool>()`.
+   `kitty @ set-colors`). Shell out in the component's `reload()`.
 3. **Re-read per invocation** — tool reads config each run (`delta`, `git`, `bat`
    with a fixed theme). Just write the fragment.
 4. **New process only** — shell env/prompt (`fzf`, `p10k`, F-Sy-H). Wire a guarded
@@ -173,40 +183,43 @@ Flags: `--force`, `--no-reload`, `--print` (JSON), `--show` (swatches),
 
 Worked example: **tmux** (live via CLI, class 2).
 
-1. Path constant: `TMUX_CONF = STATE_DIR / "tmux-accent.conf"`.
-2. Emitter (read `pal`, honor the invariant — accent on status/borders, not on
+1. **Add a path** in `config.py`: `TMUX_CONF = STATE_DIR / "tmux-accent.conf"`.
+2. **Create `components/tmux.py`** with `emit(pal)` (+ `reload()`), reading only
+   from `pal` and honoring the invariant (accent on status/borders, not on
    message/semantic text):
    ```python
-   def emit_tmux(pal):
+   import shutil, subprocess
+   from .. import config
+   from ..util import atomic_write, log
+
+   def emit(pal):
        s, a = pal["surface"], pal["accent"]
-       atomic_write(TMUX_CONF, f"""\
+       atomic_write(config.TMUX_CONF, f"""\
    set -g status-style "bg={s['bg']},fg={s['fg_variant']}"
    set -g pane-active-border-style "fg={a['primary']}"
-   set -g pane-border-style "fg={s['outline']}"
    set -g mode-style "bg={a['tertiary_container']},fg={a['on_tertiary_container']}"
    """)
-   ```
-3. Reload hook (class 2):
-   ```python
-   def reload_tmux():
+
+   def reload():
        tmux = shutil.which("tmux")
        if tmux and subprocess.run([tmux,"ls"],capture_output=True).returncode==0:
-           subprocess.run([tmux,"source-file",str(TMUX_CONF)],capture_output=True)
+           subprocess.run([tmux,"source-file",str(config.TMUX_CONF)],capture_output=True)
+           log("tmux: reloaded")
    ```
-4. Call `emit_tmux(pal)` in `main()` beside the others; `reload_tmux()` in the
-   `if not args.no_reload:` block.
-5. Integration: guarded, machine-local — e.g. in `~/.tmux.conf`:
-   `if-shell "[ -r ~/.local/state/wallpaper-accent/tmux-accent.conf ]" "source-file …"` (last, so it overrides).
-6. Add to `--show` if useful; test (below); `--force` to generate.
+3. **Register** in `components/__init__.py`: import `tmux`, add
+   `"tmux": Component("tmux", tmux.emit, tmux.reload)` to `REGISTRY`.
+4. **Enable**: add `"tmux"` to `config.DEFAULT_COMPONENTS`.
+5. **Integration** (machine-local, guarded) — in `~/.tmux.conf`, last so it wins:
+   `if-shell "[ -r ~/.local/state/wallpaper-accent/tmux-accent.conf ]" "source-file ~/.local/state/wallpaper-accent/tmux-accent.conf"`
+6. Test (cookbook below), then `--force`.
 
 **Rules:** read only from `pal`; honor the invariant (spread accent across
-primary/secondary/tertiary; keep semantic/syntax fixed); `atomic_write`; new
-process detection via `_pids("<basename>")` not `pgrep`; integration edits
-guarded so they no-op where the file is absent. Base16-consuming tools: emit
-`pal["base16"]` in that tool's format.
+primary/secondary/tertiary; keep semantic/syntax fixed); write via
+`atomic_write`; process detection via `procs.pids("<basename>")`, never `pgrep`;
+integration edits guarded so they no-op where the file is absent. Base16-consuming
+tools: emit `pal["base16"]` in that tool's format.
 
 ---
-
 ## Verification cookbook
 
 ```bash

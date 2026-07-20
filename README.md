@@ -2,8 +2,8 @@
 
 Theme terminal tools from the macOS desktop wallpaper's accent color. When the
 wallpaper changes, a background agent derives a Material You palette from the
-image and re-themes **ghostty, fzf, powerlevel10k, fast-syntax-highlighting, and
-neovim (NvChad)**, hot-reloading whatever is running.
+image and re-themes **ghostty, fzf, powerlevel10k, fast-syntax-highlighting,
+neovim (NvChad), and tmux**, hot-reloading whatever is running.
 
 Self-contained repo (its own git repo under `~/.config`, independent of the
 dotfiles layers) so the whole stack — engine + docs — lives in one place and can
@@ -49,6 +49,7 @@ fragment and, if it can, reloads running instances. See
 | **fzf** | prompt/pointer/hl/bg+/border | new shells |
 | **p10k** | directory path + prompt char | new shells |
 | **fast-syntax-highlighting** | *not the accent* — a fixed, varied syntax theme (commands blue, builtins teal, strings green, comments grey, errors red) | new shells |
+| **tmux** | status bar, active pane border, current window, clock; copy-mode selection | **live** — `tmux source-file` |
 
 Design rule: the accent drives **surfaces / greys / cursor / selection / accent-y
 UI**; **semantic hues stay fixed** (Catppuccin red/green/yellow/blue/magenta/cyan
@@ -63,19 +64,35 @@ green wallpaper isn't uniformly green.
 The script is executable (its shebang runs `uv --system-certs`):
 
 ```bash
+S=~/.config/wallpaper-accent/wallpaper-accent.py
+
 # Re-theme everything from the current wallpaper:
-~/.config/wallpaper-accent/wallpaper-accent.py --force
+$S --force                       # (bare flags == the `theme` subcommand)
+$S theme --force
+
+# Theme only one tool (repeatable):
+$S theme --only ghostty --force
 
 # Show the current palette as color swatches in the terminal:
-~/.config/wallpaper-accent/wallpaper-accent.py --show
+$S show
 
-# Preview any image (writes nothing, prints the palette JSON):
-~/.config/wallpaper-accent/wallpaper-accent.py --image ~/Pictures/foo.png --print
+# Preview any image WITHOUT writing anything (prints the palette JSON):
+$S preview ~/Pictures/foo.png
+
+# Check prerequisites + integration points are wired:
+$S doctor
+
+# List known / enabled components and their reload class:
+$S components
 
 # Apply a specific image / skip app reloads:
-~/.config/wallpaper-accent/wallpaper-accent.py --image ~/Pictures/foo.png --force
-~/.config/wallpaper-accent/wallpaper-accent.py --force --no-reload
+$S theme --image ~/Pictures/foo.png --force
+$S theme --force --no-reload
 ```
+
+> Subcommands: `theme` (default), `show`, `doctor`, `components`, `preview`. A
+> bare-flag call (`… --force`) is treated as `theme --force`, so the launchd
+> agent and shebang callers are unchanged.
 
 ### Diversify / tune the colors (env vars)
 
@@ -128,13 +145,14 @@ Edit `DEFAULT_COMPONENTS` in `src/wallpaper_accent/config.py`, or for one run:
 # only these:
 WALLPAPER_ACCENT_COMPONENTS="ghostty,fzf" ~/.config/wallpaper-accent/wallpaper-accent.py --force
 ```
-Known components: `ghostty, fzf, p10k, zsh-syntax, nvim`. Adding a new one:
+Known components: `ghostty, fzf, p10k, zsh-syntax, nvim, tmux`. Adding a new one:
 see [`ARCHITECTURE.md`](./ARCHITECTURE.md) ("Add a new tool").
 
 ### Revert an app
 - nvim: set `M.base46.theme` back to `"onedark"` in `~/.config/nvim/lua/chadrc.lua`.
 - fzf/p10k/syntax: comment the guarded `source`/`atload` lines in `.zshrc.local`.
 - ghostty: comment the include in `~/.config/ghostty/config.local`.
+- tmux: comment the guarded `source-file` line in `~/.tmux.conf`.
 
 ---
 

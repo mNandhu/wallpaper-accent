@@ -13,7 +13,7 @@ from typing import Callable, Optional
 
 from .. import config
 from ..util import log
-from . import fzf, ghostty, nvim, p10k, zsh_syntax
+from . import fzf, ghostty, nvim, p10k, tmux, zsh_syntax
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,7 @@ REGISTRY: dict[str, Component] = {
     "p10k": Component("p10k", p10k.emit),
     "zsh-syntax": Component("zsh-syntax", zsh_syntax.emit),
     "nvim": Component("nvim", nvim.emit, nvim.reload),
+    "tmux": Component("tmux", tmux.emit, tmux.reload),
 }
 
 

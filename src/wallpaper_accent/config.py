@@ -21,6 +21,11 @@ FZF_ENV = STATE_DIR / "fzf.env"
 P10K_ZSH = STATE_DIR / "p10k-accent.zsh"
 ZSH_SYNTAX = STATE_DIR / "zsh-syntax.zsh"
 NVIM_THEME = HOME / ".config/nvim/lua/themes/wallpaper_accent.lua"
+TMUX_CONF = STATE_DIR / "tmux-accent.conf"
+
+# launchd agent identity (used by the `doctor` subcommand to check it is loaded).
+AGENT_LABEL = "com.kmurthi.wallpaper-accent"
+LAUNCH_AGENT_PLIST = HOME / "Library/LaunchAgents" / f"{AGENT_LABEL}.plist"
 
 # --- Background tint knobs (override via env) -------------------------------
 # Material's dark `surface` is almost neutral (chroma ~5), so an accent barely
@@ -72,7 +77,7 @@ ENGINE_VERSION = 2
 
 # Enabled components, in run order. Edit this list to disable a tool, or set
 # WALLPAPER_ACCENT_COMPONENTS="ghostty,fzf" to override at runtime.
-DEFAULT_COMPONENTS = ["ghostty", "fzf", "p10k", "zsh-syntax", "nvim"]
+DEFAULT_COMPONENTS = ["ghostty", "fzf", "p10k", "zsh-syntax", "nvim", "tmux"]
 
 
 def enabled_component_names() -> list[str]:

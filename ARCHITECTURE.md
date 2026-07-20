@@ -18,9 +18,10 @@ a `wallpaper-accent` console entry for growing into a CLI.
 
 - Extract accent from wallpaper → build palette → write `colors.json` → render
   per-app fragments → reload apps.
-- Themes: ghostty, fzf, powerlevel10k, fast-syntax-highlighting, nvim (NvChad).
+- Themes: ghostty, fzf, powerlevel10k, fast-syntax-highlighting, nvim (NvChad), tmux.
 - Run: `~/.config/wallpaper-accent/wallpaper-accent.py --force`
-- Inspect: `… --show` (swatches) / `… --print` (JSON) / `… --image X --print`.
+- Subcommands: `theme` (default) / `show` / `doctor` / `components` / `preview`.
+  Bare-flag calls (`… --force`) dispatch to `theme` for launchd/shebang compat.
 - Triggered by launchd agent `com.kmurthi.wallpaper-accent` on login / wallpaper
   change / 15-min timer.
 
@@ -85,10 +86,11 @@ flowchart LR
     wallpaper.py    # find_wallpaper(), is_dark_appearance()
     palette.py      # build_palette(image, dark) -> pal  + guards + collision_report
     show.py         # show_palette()  (--show swatches)
-    cli.py          # main(): argparse + orchestration
+    cli.py          # main(): argparse subcommands + orchestration
+    doctor.py       # `doctor` subcommand: prereq + integration-point health
     components/
       __init__.py   # Component dataclass, REGISTRY, enabled()
-      ghostty.py fzf.py p10k.py zsh_syntax.py nvim.py   # emit() [+ reload()]
+      ghostty.py fzf.py p10k.py zsh_syntax.py nvim.py tmux.py  # emit() [+ reload()]
 ```
 
 Generated output (NOT in the repo) under `~/.local/state/wallpaper-accent/`:
@@ -179,15 +181,18 @@ so changing one re-themes without `--force`.
 | `wallpaper.py` | `find_wallpaper()` (Index.plist → osascript → None), `is_dark_appearance()` |
 | `palette.py` | `build_palette(image, dark) -> pal` (**core**: seed, scheme, tinted neutrals, base16) + guards (`repel_accent`, `nudge_semantics`, `enforce_contrast`) + `collision_report` |
 | `show.py` | `show_palette()` — `--show` swatches from colors.json |
-| `cli.py` | `main()`: argparse, idempotency, `_write_colors_json`, orchestration |
+| `cli.py` | `main()`: argparse subcommands (`theme`/`show`/`doctor`/`components`/`preview`), idempotency, `_write_colors_json`, orchestration |
+| `doctor.py` | `run()`: verify `uv`, `colors.json`, launchd agent, and each component's fragment + machine-local integration reference |
 | `components/__init__.py` | `Component(name, emit, reload)`, `REGISTRY`, `enabled()` |
 | `components/<tool>.py` | `emit(pal)` writes the fragment; optional `reload()` applies it |
 
 Every emitter takes the same `pal` dict and writes via `atomic_write`; signal
 reloads go through `procs.signal_all(basename, sig)`.
 
-Flags: `--force`, `--no-reload`, `--print` (JSON), `--show` (swatches),
-`--image PATH`, `--dark`/`--light`.
+Commands: `theme` (`--force`, `--no-reload`, `--print`, `--show`, `--image PATH`,
+`--only NAME`, `--dark`/`--light`), `show`, `doctor`, `components`, `preview PATH`
+(builds a palette and prints JSON, writing nothing). A bare-flag invocation is
+rewritten to `theme …` so existing launchd/shebang callers keep working.
 
 **Enable/disable a tool:** edit `config.DEFAULT_COMPONENTS`, or set
 `WALLPAPER_ACCENT_COMPONENTS="ghostty,fzf"` for a single run.
@@ -208,7 +213,8 @@ Flags: `--force`, `--no-reload`, `--print` (JSON), `--show` (swatches),
 
 ## Add a new tool — recipe
 
-Worked example: **tmux** (live via CLI, class 2).
+Worked example: **tmux** (live via CLI, class 2) — now shipped, so this is the
+real thing; see `components/tmux.py` and the steps below to add the next tool.
 
 1. **Add a path** in `config.py`: `TMUX_CONF = STATE_DIR / "tmux-accent.conf"`.
 2. **Create `components/tmux.py`** with `emit(pal)` (+ `reload()`), reading only
@@ -251,8 +257,19 @@ tools: emit `pal["base16"]` in that tool's format.
 
 ```bash
 S=~/.config/wallpaper-accent/wallpaper-accent.py
-$S --force && $S --show            # regenerate + eyeball swatches
+$S --force && $S show              # regenerate + eyeball swatches
+$S doctor                          # prereqs + integration points wired?
 cat ~/.local/state/wallpaper-accent/colors.json
+
+# Unit tests: color math + palette guards + end-to-end build_palette invariant.
+# pytest/materialyoucolor are cached, so run offline to skip the pypi TLS MITM:
+uv run --offline --no-project --with pytest --with "materialyoucolor>=3.0.2" \
+  python -m pytest tests/
+
+# tmux: fragment sources cleanly in a throwaway server (class-2 live reload):
+tmux -L watest new-session -d && \
+  tmux -L watest source-file ~/.local/state/wallpaper-accent/tmux-accent.conf && \
+  tmux -L watest kill-server
 
 # ghostty resolves; semantic hues unchanged
 ghostty +show-config | grep -E '^(background|cursor-color|palette = [0-8]=)'

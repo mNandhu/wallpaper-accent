@@ -25,8 +25,8 @@ foreground = {s["fg"]}
 cursor-color = {a["primary"]}
 cursor-text = {a["on_primary"]}
 
-selection-background = {a["tertiary_container"]}
-selection-foreground = {a["on_tertiary_container"]}
+selection-background = {s["selection"]}
+selection-foreground = {s["on_selection"]}
 
 # Neutral greys, accent-tinted (no semantic-hue collision)
 palette = 0={s["black"]}

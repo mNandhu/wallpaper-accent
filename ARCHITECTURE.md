@@ -80,9 +80,10 @@ flowchart LR
   src/wallpaper_accent/
     config.py       # paths, tint/scheme knobs, CATPPUCCIN, DEFAULT_COMPONENTS
     util.py         # log, atomic_write, rgb
+    color.py        # dependency-free colour math (ΔE, contrast, hue geometry)
     procs.py        # ps-based pids() + signal_all()  (pgrep is unreliable here)
     wallpaper.py    # find_wallpaper(), is_dark_appearance()
-    palette.py      # build_palette(image, dark) -> pal
+    palette.py      # build_palette(image, dark) -> pal  + guards + collision_report
     show.py         # show_palette()  (--show swatches)
     cli.py          # main(): argparse + orchestration
     components/
@@ -114,7 +115,7 @@ pal = {
   "accent":  { primary, on_primary, primary_container, on_primary_container,
                secondary, on_secondary, secondary_container, on_secondary_container,
                tertiary, on_tertiary, tertiary_container, on_tertiary_container, error },
-  "surface": { bg, black, fg, fg_variant, outline, selection },
+  "surface": { bg, black, fg, fg_variant, outline, selection, on_selection },
   "ramp": {tone:hex}, "greys": {tone:hex}, "grey_keys": [...],
   "base16": { base00..base0F },     # 00-07 tinted neutrals, 08-0F fixed hues
   "catppuccin": {...},
@@ -136,9 +137,34 @@ monochromatic. **Semantic + syntax hues are fixed** (`CATPPUCCIN` / base16
 `base08..base0F`), never the accent — keeps logs/diffs/`ls`/code legible. Every
 emitter honors this (e.g. `emit_zsh_syntax` uses only base16, never the accent).
 
+**Palette guards** (`palette.py`, all off `MIN_HUE_SEP`/`CHROMA_FLOOR`/… knobs;
+pure colour math in `color.py`). Run inside `build_palette` to keep the invariant
+usable on adversarial wallpapers:
+1. **Robust seed** — `_select_seed` takes the most prominent quantized colour
+   whose chroma ≥ `CHROMA_FLOOR` (skips near-greys → stable, non-washed accent).
+2. **Chroma floor / greyscale fallback** — `_accent_seed` lifts a dull seed's
+   chroma; if the hue is meaningless (chroma < `GREY_HUE_CHROMA`) it substitutes
+   `FALLBACK_HUE` (210, in the wide teal→blue gap). Neutrals keep the real seed.
+3. **Hue de-confliction** — spread schemes `repel_accent` (rotate each role group
+   ≥ `MIN_HUE_SEP`° off every fixed syntax hue via `nearest_allowed_hue`);
+   `tonalspot` (see `MONOCHROMATIC_SCHEMES`) instead `nudge_semantics` (move the
+   colliding base08-0F hue off the accent, preserving the single-hue accent).
+   This is what stops a blue wallpaper making the cursor impersonate syntax blue.
+   The *only* sanctioned exception to "syntax hues are fixed" is that nudge.
+4. **Contrast** — `enforce_contrast` lifts `fg`/`fg_variant` tone until they clear
+   `FG_MIN_CONTRAST` over the (overridden) tinted `bg`.
+5. **One selection colour** — `surface.selection`/`on_selection` (tertiary
+   container) is the single source; **every** component reads it (no per-tool
+   hardcoding). `collision_report(colors)` (ΔE-based, dependency-free) surfaces
+   any residual collision in `--show`/`--print`.
+
 **Knobs** (env): `GHOSTTY_ACCENT_SCHEME` (`vibrant`), `GHOSTTY_ACCENT_BG_TONE`
 (14), `GHOSTTY_ACCENT_BG_CHROMA` (22), `GHOSTTY_ACCENT_BLACK_TONE` (22),
-`GHOSTTY_ACCENT_BLACK_CHROMA` (18).
+`GHOSTTY_ACCENT_BLACK_CHROMA` (18), `GHOSTTY_ACCENT_MIN_HUE_SEP` (20),
+`GHOSTTY_ACCENT_CHROMA_FLOOR` (12), `GHOSTTY_ACCENT_FALLBACK_HUE` (210),
+`GHOSTTY_ACCENT_FG_CONTRAST` (4.5). All palette-affecting knobs plus
+`ENGINE_VERSION` are folded into the idempotency key (`config.tuning_signature()`)
+so changing one re-themes without `--force`.
 
 ---
 
@@ -146,11 +172,12 @@ emitter honors this (e.g. `emit_zsh_syntax` uses only base16, never the accent).
 
 | Module | Responsibility |
 |---|---|
-| `config.py` | paths, tint/scheme knobs, `CATPPUCCIN`, `DEFAULT_COMPONENTS`, `enabled_component_names()` |
+| `config.py` | paths, tint/scheme/guard knobs, `CATPPUCCIN`, `DEFAULT_COMPONENTS`, `tuning_signature()`, `ENGINE_VERSION` |
 | `util.py` | `log`, `atomic_write`, `rgb` |
+| `color.py` | dependency-free colour math: `delta_e`, `contrast_ratio`, `hue_distance`, `nearest_allowed_hue` (guards + `collision_report`) |
 | `procs.py` | `pids(name)`, `signal_all(name, sig)` — **ps-based**, never pgrep |
 | `wallpaper.py` | `find_wallpaper()` (Index.plist → osascript → None), `is_dark_appearance()` |
-| `palette.py` | `build_palette(image, dark) -> pal` (**core**: scheme, tinted neutrals, base16) |
+| `palette.py` | `build_palette(image, dark) -> pal` (**core**: seed, scheme, tinted neutrals, base16) + guards (`repel_accent`, `nudge_semantics`, `enforce_contrast`) + `collision_report` |
 | `show.py` | `show_palette()` — `--show` swatches from colors.json |
 | `cli.py` | `main()`: argparse, idempotency, `_write_colors_json`, orchestration |
 | `components/__init__.py` | `Component(name, emit, reload)`, `REGISTRY`, `enabled()` |

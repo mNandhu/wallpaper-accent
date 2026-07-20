@@ -38,6 +38,38 @@ BLACK_CHROMA_CAP = float(os.environ.get("GHOSTTY_ACCENT_BLACK_CHROMA", "18"))
 # "fruitsalad", "rainbow", "content". This is the color-wheel harmony choice.
 ACCENT_SCHEME = os.environ.get("GHOSTTY_ACCENT_SCHEME", "vibrant").strip().lower()
 
+# --- Accent/semantic de-confliction guards (override via env) ---------------
+# The accent is meant to look distinct from the FIXED syntax hues (Catppuccin
+# base08..base0F). On a wallpaper whose dominant hue *is* one of those hues
+# (e.g. a blue wallpaper vs syntax blue) the accent would otherwise impersonate
+# a syntax colour. These guards keep them apart. See palette.deconflict().
+#
+# MIN_HUE_SEP: minimum colour-wheel separation (degrees) enforced between every
+#   accent role and every fixed semantic hue. Spread schemes rotate the accent
+#   away; monochromatic schemes (tonalspot) instead nudge the colliding syntax
+#   hue (preserving the single-hue accent aesthetic). 0 disables the guard.
+MIN_HUE_SEP = float(os.environ.get("GHOSTTY_ACCENT_MIN_HUE_SEP", "20"))
+# Schemes treated as monochromatic (nudge the semantic hue, not the accent).
+MONOCHROMATIC_SCHEMES = {"tonalspot"}
+# CHROMA_FLOOR: seeds below this are near-greyscale → the wallpaper hue is dull
+#   or (near 0) meaningless. The accent seed's chroma is lifted to the floor;
+#   below GREY_HUE_CHROMA the hue is unreliable so FALLBACK_HUE is used instead.
+CHROMA_FLOOR = float(os.environ.get("GHOSTTY_ACCENT_CHROMA_FLOOR", "12"))
+GREY_HUE_CHROMA = 5.0
+# 210 sits in the wide teal->blue gap of the fixed hue wheel, so the synthesized
+# accent for a colourless wallpaper stays clear of every syntax hue.
+FALLBACK_HUE = float(os.environ.get("GHOSTTY_ACCENT_FALLBACK_HUE", "210"))
+# Minimum WCAG contrast of foreground text against the tinted background. Our
+# background overrides Material's surface, so Material's onSurface is not
+# guaranteed legible against it; enforce_contrast() lifts the tone until it is.
+FG_MIN_CONTRAST = float(os.environ.get("GHOSTTY_ACCENT_FG_CONTRAST", "4.5"))
+FG_VARIANT_MIN_CONTRAST = 3.0
+# ΔE below which the collision report flags an accent role as confusable with a
+# fixed syntax hue (diagnostic only; --show / --print).
+REPORT_DE_THRESHOLD = 12.0
+# Bump when the palette math changes so a stale colors.json is regenerated.
+ENGINE_VERSION = 2
+
 # Enabled components, in run order. Edit this list to disable a tool, or set
 # WALLPAPER_ACCENT_COMPONENTS="ghostty,fzf" to override at runtime.
 DEFAULT_COMPONENTS = ["ghostty", "fzf", "p10k", "zsh-syntax", "nvim"]
@@ -48,6 +80,21 @@ def enabled_component_names() -> list[str]:
     if env:
         return [c.strip() for c in env.split(",") if c.strip()]
     return list(DEFAULT_COMPONENTS)
+
+
+def tuning_signature() -> dict:
+    """Palette-affecting knobs folded into the idempotency key, so changing a
+    scheme/tint/guard env var re-themes without --force (colors.json otherwise
+    looks up-to-date because the wallpaper is unchanged)."""
+    return {
+        "engine": ENGINE_VERSION,
+        "scheme": ACCENT_SCHEME,
+        "bg_tone": BG_TONE, "bg_chroma": BG_CHROMA_CAP,
+        "black_tone": BLACK_TONE, "black_chroma": BLACK_CHROMA_CAP,
+        "min_hue_sep": MIN_HUE_SEP, "chroma_floor": CHROMA_FLOOR,
+        "fallback_hue": FALLBACK_HUE, "fg_contrast": FG_MIN_CONTRAST,
+        "components": enabled_component_names(),
+    }
 
 
 # Fixed semantic hues (Catppuccin Mocha). Shared by every emitter so red stays

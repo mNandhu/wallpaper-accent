@@ -95,6 +95,17 @@ The script is executable (its shebang runs `uv --system-certs`):
 | `GHOSTTY_ACCENT_BLACK_CHROMA` | `18` | tint of ANSI "black" / darkest greys |
 | `GHOSTTY_ACCENT_BLACK_TONE` | `22` | lightness of ANSI "black" |
 
+**Guards** — keep the accent distinct from the fixed syntax hues, legible, and
+alive even on adversarial wallpapers (e.g. a **blue** wallpaper vs syntax blue,
+or a greyscale one). Sensible defaults; tune only if you want to.
+
+| Var | Default | Effect |
+|---|---|---|
+| `GHOSTTY_ACCENT_MIN_HUE_SEP` | `20` | min hue° between accent and any syntax hue. Spread schemes rotate the accent off it; `tonalspot` nudges the syntax hue instead. `0` disables. |
+| `GHOSTTY_ACCENT_CHROMA_FLOOR` | `12` | seeds duller than this are treated as near-greyscale → accent chroma is lifted so it stays vivid |
+| `GHOSTTY_ACCENT_FALLBACK_HUE` | `210` | accent hue used when the wallpaper is essentially colourless (hue meaningless) |
+| `GHOSTTY_ACCENT_FG_CONTRAST` | `4.5` | min WCAG contrast of foreground text over the tinted background |
+
 One-off: `GHOSTTY_ACCENT_SCHEME=rainbow ~/.config/wallpaper-accent/wallpaper-accent.py --force`
 Permanent: add under `EnvironmentVariables` in the launchd plist, then reload the agent.
 
@@ -127,13 +138,85 @@ see [`ARCHITECTURE.md`](./ARCHITECTURE.md) ("Add a new tool").
 
 ---
 
+## Setup — run automatically on wallpaper change
+
+The engine runs itself via a **launchd LaunchAgent**. `WatchPaths` watches the
+macOS wallpaper store, so changing your desktop picture fires the script within
+a second; `RunAtLoad` re-themes at login and `StartInterval` is a safety net.
+
+**1. Prerequisite:** `uv` must be installed and allowlisted (`which uv` →
+`/opt/homebrew/bin/uv` here). No other deps — `uv` provisions `materialyoucolor`
+from the script's PEP-723 block on first run.
+
+**2. Create the agent** at `~/Library/LaunchAgents/com.kmurthi.wallpaper-accent.plist`
+(replace `kmurthi` / `/Users/kmurthi` with your username / `$HOME`, and the `uv`
+path if `which uv` differs):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.kmurthi.wallpaper-accent</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/uv</string>
+    <string>run</string><string>--system-certs</string>
+    <string>--no-project</string><string>--script</string>
+    <string>/Users/kmurthi/.config/wallpaper-accent/wallpaper-accent.py</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <!-- Fires when the desktop wallpaper changes (macOS rewrites this store). -->
+  <key>WatchPaths</key>
+  <array>
+    <string>/Users/kmurthi/Library/Application Support/com.apple.wallpaper/Store</string>
+    <string>/Users/kmurthi/Library/Application Support/com.apple.wallpaper/Store/Index.plist</string>
+  </array>
+  <!-- Safety net + catches light/dark flips (no file change). -->
+  <key>StartInterval</key><integer>900</integer>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/kmurthi</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <!-- Zscaler MITM: belt-and-suspenders with --system-certs. -->
+    <key>SSL_CERT_FILE</key><string>/Users/kmurthi/.config/certs/zscaler-ca.user.pem</string>
+    <!-- Optional: pin any GHOSTTY_ACCENT_* knob here, e.g.: -->
+    <!-- <key>GHOSTTY_ACCENT_SCHEME</key><string>vibrant</string> -->
+  </dict>
+  <key>ProcessType</key><string>Background</string>
+  <key>LimitLoadToSessionType</key><string>Aqua</string>
+  <key>StandardOutPath</key><string>/Users/kmurthi/.local/state/wallpaper-accent/run.log</string>
+  <key>StandardErrorPath</key><string>/Users/kmurthi/.local/state/wallpaper-accent/run.log</string>
+</dict>
+</plist>
+```
+
+**3. Load it** (and reload after any plist edit — see below):
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kmurthi.wallpaper-accent.plist
+```
+
+**4. Verify:** change your wallpaper, then check the log and palette:
+```bash
+tail -f ~/.local/state/wallpaper-accent/run.log      # should log a re-theme
+~/.config/wallpaper-accent/wallpaper-accent.py --show # swatches for the new wall
+launchctl print gui/$(id -u)/com.kmurthi.wallpaper-accent | grep -iE 'state|runs|last exit'
+```
+
+> Changing a `GHOSTTY_ACCENT_*` knob now re-themes on the **next** trigger even
+> if the wallpaper is unchanged (the knobs are folded into the idempotency key),
+> so you no longer need `--force` after editing the plist — just reload the agent.
+
+---
+
 ## How it runs / survives restarts
 
 - launchd agent `com.kmurthi.wallpaper-accent` auto-loads at login. `RunAtLoad`
   re-themes on login; `WatchPaths` fires on wallpaper change; `StartInterval 900`
   is a 15-min safety net (also catches light/dark flips).
 - Not a daemon — runs on demand (~1–4s) and exits. An idempotency guard
-  (`state.json`) skips work when nothing changed (`--force` overrides).
+  (`state.json`) skips work when nothing changed — the wallpaper, appearance,
+  **and** the `GHOSTTY_ACCENT_*` knobs (`--force` overrides).
 - All fragments persist on disk, so each app reads its last theme at startup.
 
 ---
@@ -144,7 +227,11 @@ see [`ARCHITECTURE.md`](./ARCHITECTURE.md) ("Add a new tool").
   no image file → the run logs `keeping previous theme` and exits 0.
 - **fzf / p10k / syntax update new shells only** (per-process); nvim and ghostty
   update live.
-- **Semantic + syntax hues are fixed**, never the accent.
+- **Semantic + syntax hues are fixed**, never the accent. Guards keep the accent
+  ≥`MIN_HUE_SEP`° off every syntax hue so a same-hued wallpaper (e.g. blue) can't
+  make the cursor/prompt impersonate syntax blue; `--show`/`--print` report any
+  residual collision. `tonalspot` is the one exception — it keeps the single-hue
+  accent and instead nudges the colliding syntax hue.
 - **nvim theme is switched to `wallpaper_accent`** (revert = one line in chadrc).
 - `SIGUSR2` = ghostty reload, `SIGUSR1` = nvim. Any other signal crashes ghostty.
 - `pgrep` is unreliable here; process detection uses `ps`.

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from . import components, config
-from .palette import build_palette
+from .palette import build_palette, collision_report
 from .show import show_palette
 from .util import atomic_write, log
 from .wallpaper import find_wallpaper, is_dark_appearance
@@ -50,7 +50,8 @@ def main() -> int:
         return 0
     dark = True if args.dark else False if args.light else is_dark_appearance()
 
-    key = {"image": str(image), "mtime": image.stat().st_mtime, "dark": dark}
+    key = {"image": str(image), "mtime": image.stat().st_mtime, "dark": dark,
+           "tuning": config.tuning_signature()}
     if not args.force and not args.to_stdout and config.COLORS_JSON.is_file():
         try:
             prev = json.loads(config.STATE_FILE.read_text())
@@ -61,6 +62,8 @@ def main() -> int:
             return 0
 
     pal = build_palette(image, dark)
+    for line in collision_report(pal):
+        log(f"collision: {line}")
 
     if args.to_stdout:
         _write_colors_json(pal)

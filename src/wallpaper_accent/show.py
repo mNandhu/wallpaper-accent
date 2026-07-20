@@ -34,4 +34,12 @@ def show_palette() -> int:
     section("surface", [(k, s[k]) for k in
             ("bg", "black", "fg", "fg_variant", "outline", "selection") if k in s])
     section("base16", [(k, b16[k]) for k in sorted(b16)])
+
+    from .palette import collision_report
+    hits = collision_report(d)
+    if hits:
+        print("  \x1b[1m\x1b[33mcollisions\x1b[0m (accent confusable with syntax hue)")
+        for line in hits:
+            print(f"    ⚠ {line}")
+        print()
     return 0

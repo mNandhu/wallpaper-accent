@@ -90,11 +90,29 @@ $S theme --image ~/Pictures/foo.png --force
 $S theme --force --no-reload
 ```
 
-> Subcommands: `theme` (default), `show`, `doctor`, `components`, `preview`. A
+> Subcommands: `theme` (default), `show`, `doctor`, `components`, `preview`,
+> `config`. A
 > bare-flag call (`… --force`) is treated as `theme --force`, so the launchd
 > agent and shebang callers are unchanged.
 
-### Diversify / tune the colors (env vars)
+### Diversify / tune the colors
+
+Change these two ways — a **persistent CLI** (no plist edits) or one-off env
+vars:
+
+```bash
+S=~/.config/wallpaper-accent/wallpaper-accent.py
+$S config list                 # every knob, its value, and its source
+$S config set bg_chroma 6      # persist an override (survives reboots + the agent)
+$S config set scheme rainbow
+$S config unset bg_chroma      # revert to default
+$S theme --force               # apply now (else it applies on the next wallpaper change)
+```
+
+Overrides persist to `~/.local/state/wallpaper-accent/settings.json`. Precedence
+is **env var > settings file > default**, so an env var still wins for a one-off.
+Each `GHOSTTY_ACCENT_<X>` var below maps to the `config` knob `<x>` (e.g.
+`GHOSTTY_ACCENT_BG_CHROMA` → `bg_chroma`, `GHOSTTY_ACCENT_MIN_HUE_SEP` → `min_hue_sep`).
 
 **Harmony** — how varied the accent is (one wallpaper color → primary + secondary
 + tertiary; the scheme sets how far apart their hues are).
@@ -123,8 +141,10 @@ or a greyscale one). Sensible defaults; tune only if you want to.
 | `GHOSTTY_ACCENT_FALLBACK_HUE` | `210` | accent hue used when the wallpaper is essentially colourless (hue meaningless) |
 | `GHOSTTY_ACCENT_FG_CONTRAST` | `4.5` | min WCAG contrast of foreground text over the tinted background |
 
-One-off: `GHOSTTY_ACCENT_SCHEME=rainbow ~/.config/wallpaper-accent/wallpaper-accent.py --force`
-Permanent: add under `EnvironmentVariables` in the launchd plist, then reload the agent.
+One-off (this run only): `GHOSTTY_ACCENT_SCHEME=rainbow $S theme --force`
+Persistent: `$S config set scheme rainbow` (or, equivalently, add under
+`EnvironmentVariables` in the launchd plist and reload the agent — but `config`
+is easier and needs no reload).
 
 ### Reload the launchd agent (after editing the plist)
 ```bash

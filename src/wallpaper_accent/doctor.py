@@ -118,8 +118,17 @@ def _check_component(name: str) -> list[Check]:
     return out
 
 
+def _check_settings() -> Check:
+    overrides = {k: config.knob_value(k) for k in config.KNOBS
+                 if config.knob_source(k) != "default"}
+    if not overrides:
+        return Check(OK, "knobs", "all defaults")
+    parts = ", ".join(f"{k}={v} ({config.knob_source(k)})" for k, v in overrides.items())
+    return Check(OK, "knobs", parts)
+
+
 def run() -> int:
-    checks: list[Check] = [_check_uv(), _check_palette()]
+    checks: list[Check] = [_check_uv(), _check_palette(), _check_settings()]
     checks += _check_agent()
     for name in config.enabled_component_names():
         if name not in components.REGISTRY:

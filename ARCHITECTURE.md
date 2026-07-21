@@ -95,7 +95,8 @@ flowchart LR
 
 Generated output (NOT in the repo) under `~/.local/state/wallpaper-accent/`:
 `colors.json` (palette, source of truth), `ghostty.conf`, `fzf.env`,
-`p10k-accent.zsh`, `zsh-syntax.zsh`, `state.json`, `run.log`. Plus
+`p10k-accent.zsh`, `zsh-syntax.zsh`, `tmux-accent.conf`, `settings.json`
+(persistent knob overrides), `state.json`, `run.log`. Plus
 `~/.config/nvim/lua/themes/wallpaper_accent.lua` (must be in nvim's runtimepath).
 
 **Integration points (machine-local, edited once):**
@@ -160,13 +161,16 @@ usable on adversarial wallpapers:
    hardcoding). `collision_report(colors)` (ΔE-based, dependency-free) surfaces
    any residual collision in `--show`/`--print`.
 
-**Knobs** (env): `GHOSTTY_ACCENT_SCHEME` (`vibrant`), `GHOSTTY_ACCENT_BG_TONE`
-(14), `GHOSTTY_ACCENT_BG_CHROMA` (22), `GHOSTTY_ACCENT_BLACK_TONE` (22),
-`GHOSTTY_ACCENT_BLACK_CHROMA` (18), `GHOSTTY_ACCENT_MIN_HUE_SEP` (20),
-`GHOSTTY_ACCENT_CHROMA_FLOOR` (12), `GHOSTTY_ACCENT_FALLBACK_HUE` (210),
-`GHOSTTY_ACCENT_FG_CONTRAST` (4.5). All palette-affecting knobs plus
-`ENGINE_VERSION` are folded into the idempotency key (`config.tuning_signature()`)
-so changing one re-themes without `--force`.
+**Knobs** live in one `config.KNOBS` registry (name → env var, coercer, default,
+help), so the same name is the settings-file key, the `tuning_signature` key, and
+the `config` subcommand key. Each resolves **env var > settings file > default**
+(`config.knob_value`/`knob_source`; `set_knob`/`unset_knob` persist to
+`SETTINGS_FILE`). Current knobs: `scheme` (`vibrant`), `bg_tone` (14), `bg_chroma`
+(22), `black_tone` (22), `black_chroma` (18), `min_hue_sep` (20), `chroma_floor`
+(12), `fallback_hue` (210), `fg_contrast` (4.5) — env vars are `GHOSTTY_ACCENT_<X>`.
+All are folded into the idempotency key (`tuning_signature()`) with
+`ENGINE_VERSION`, so changing one re-themes without `--force`. To add a knob, add
+one `KNOBS` row and one resolved constant — CLI/config/signature pick it up.
 
 ---
 
@@ -174,15 +178,15 @@ so changing one re-themes without `--force`.
 
 | Module | Responsibility |
 |---|---|
-| `config.py` | paths, tint/scheme/guard knobs, `CATPPUCCIN`, `DEFAULT_COMPONENTS`, `tuning_signature()`, `ENGINE_VERSION` |
+| `config.py` | paths, `KNOBS` registry + `knob_value`/`set_knob`/`unset_knob` (env>file>default), `SETTINGS_FILE`, `CATPPUCCIN`, `DEFAULT_COMPONENTS`, `tuning_signature()`, `ENGINE_VERSION` |
 | `util.py` | `log`, `atomic_write`, `rgb` |
 | `color.py` | dependency-free colour math: `delta_e`, `contrast_ratio`, `hue_distance`, `nearest_allowed_hue` (guards + `collision_report`) |
 | `procs.py` | `pids(name)`, `signal_all(name, sig)` — **ps-based**, never pgrep |
 | `wallpaper.py` | `find_wallpaper()` (Index.plist → osascript → None), `is_dark_appearance()` |
 | `palette.py` | `build_palette(image, dark) -> pal` (**core**: seed, scheme, tinted neutrals, base16) + guards (`repel_accent`, `nudge_semantics`, `enforce_contrast`) + `collision_report` |
 | `show.py` | `show_palette()` — `--show` swatches from colors.json |
-| `cli.py` | `main()`: argparse subcommands (`theme`/`show`/`doctor`/`components`/`preview`), idempotency, `_write_colors_json`, orchestration |
-| `doctor.py` | `run()`: verify `uv`, `colors.json`, launchd agent, and each component's fragment + machine-local integration reference |
+| `cli.py` | `main()`: argparse subcommands (`theme`/`show`/`doctor`/`components`/`preview`/`config`), idempotency, `_write_colors_json`, orchestration |
+| `doctor.py` | `run()`: verify `uv`, `colors.json`, active knob overrides, launchd agent, and each component's fragment + machine-local integration reference |
 | `components/__init__.py` | `Component(name, emit, reload)`, `REGISTRY`, `enabled()` |
 | `components/<tool>.py` | `emit(pal)` writes the fragment; optional `reload()` applies it |
 
@@ -191,7 +195,8 @@ reloads go through `procs.signal_all(basename, sig)`.
 
 Commands: `theme` (`--force`, `--no-reload`, `--print`, `--show`, `--image PATH`,
 `--only NAME`, `--dark`/`--light`), `show`, `doctor`, `components`, `preview PATH`
-(builds a palette and prints JSON, writing nothing). A bare-flag invocation is
+(builds a palette and prints JSON, writing nothing), and `config`
+(`list`/`get`/`set`/`unset` the persistent knobs). A bare-flag invocation is
 rewritten to `theme …` so existing launchd/shebang callers keep working.
 
 **Enable/disable a tool:** edit `config.DEFAULT_COMPONENTS`, or set

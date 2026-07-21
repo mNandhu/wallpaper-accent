@@ -19,7 +19,7 @@ from .util import atomic_write, log
 from .wallpaper import find_wallpaper, is_dark_appearance
 
 _COLORS_KEYS = ("source", "seed", "scheme", "dark", "accent", "surface", "base16")
-SUBCOMMANDS = {"theme", "show", "doctor", "components", "preview"}
+SUBCOMMANDS = {"theme", "show", "doctor", "components", "preview", "config"}
 
 
 def _colors_subset(pal: dict) -> str:
@@ -106,6 +106,51 @@ def _preview(image_arg: str) -> int:
     return 0
 
 
+def _config(args: argparse.Namespace) -> int:
+    action = args.config_action
+    known = ", ".join(config.KNOBS)
+    if action in ("get", "set", "unset"):
+        if not args.key:
+            log(f"'config {action}' needs a knob name. known: {known}")
+            return 1
+        if args.key not in config.KNOBS:
+            log(f"unknown knob '{args.key}'. known: {known}")
+            return 1
+
+    if action == "get":
+        print(config.knob_value(args.key))
+        return 0
+    if action == "set":
+        if args.value is None:
+            log("usage: config set KEY VALUE")
+            return 1
+        try:
+            val = config.set_knob(args.key, args.value)
+        except ValueError as exc:
+            log(str(exc))
+            return 1
+        print(f"{args.key} = {val}  →  {config.SETTINGS_FILE}")
+        print("apply now: wallpaper-accent theme --force "
+              "(otherwise it applies on the next wallpaper change)")
+        return 0
+    if action == "unset":
+        removed = config.unset_knob(args.key)
+        print(f"{args.key}: {'reverted to default' if removed else 'was not set'}")
+        return 0
+
+    # list (default)
+    print(f"\n  wallpaper-accent knobs  (settings: {config.SETTINGS_FILE})\n")
+    kw = max(len(k) for k in config.KNOBS)
+    for key, (_env, _c, _default, help_) in config.KNOBS.items():
+        val = str(config.knob_value(key))
+        src = config.knob_source(key)
+        print(f"  {key.ljust(kw)}  {val:9} [{src:7}]  {help_}")
+    print("\n  config set <knob> <value>   persist an override")
+    print("  config unset <knob>         revert to default")
+    print("  precedence: env var > settings file > default\n")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="wallpaper-accent",
@@ -136,6 +181,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("preview",
                         help="build a palette from an image and print JSON (writes nothing)")
     p.add_argument("image", metavar="PATH")
+    c = sub.add_parser("config",
+                       help="get/set persistent palette knobs (no env vars needed)")
+    c.add_argument("config_action", nargs="?", default="list",
+                   choices=["list", "get", "set", "unset"],
+                   help="list (default), get, set, or unset a knob")
+    c.add_argument("key", nargs="?", help="knob name (see `config list`)")
+    c.add_argument("value", nargs="?", help="new value (for `config set`)")
     return ap
 
 
@@ -158,4 +210,6 @@ def main(argv: list[str] | None = None) -> int:
         return _components()
     if cmd == "preview":
         return _preview(args.image)
+    if cmd == "config":
+        return _config(args)
     return _theme(args)

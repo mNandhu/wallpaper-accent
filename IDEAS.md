@@ -49,8 +49,11 @@ semantic coloring (diff/ls), where the invariant pins most hues fixed.
 
 ### Shipped this round
 - **[done] Real CLI** — `theme` (default) / `show` / `doctor` / `components` /
-  `preview` subcommands; bare-flag invocation still means `theme` (launchd
-  unaffected). `theme --only NAME` themes a single component.
+  `preview` / `config` subcommands; bare-flag invocation still means `theme`
+  (launchd unaffected). `theme --only NAME` themes a single component.
+- **[done] Persistent knob config.** `config list/get/set/unset` writes
+  `settings.json`; resolution is env var > settings file > default, so tuning no
+  longer requires editing the launchd plist. Driven by one `config.KNOBS` registry.
 - **[done] `doctor`** — verifies prereqs (`uv`), `colors.json`, launchd agent
   loaded, and every component's fragment + machine-local integration reference.
 - **[done] Test suite** — `color.py` primitives, palette guards

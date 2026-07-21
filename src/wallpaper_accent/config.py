@@ -26,6 +26,11 @@ P10K_ZSH = STATE_DIR / "p10k-accent.zsh"
 ZSH_SYNTAX = STATE_DIR / "zsh-syntax.zsh"
 NVIM_THEME = HOME / ".config/nvim/lua/themes/wallpaper_accent.lua"
 TMUX_CONF = STATE_DIR / "tmux-accent.conf"
+DELTA_GITCONFIG = STATE_DIR / "delta.gitconfig"
+LAZYGIT_YML = STATE_DIR / "lazygit.yml"
+ZSH_AUTOSUGGEST = STATE_DIR / "zsh-autosuggest.zsh"
+YAZI_FLAVOR_DIR = HOME / ".config/yazi/flavors/wallpaper-accent.yazi"
+YAZI_FLAVOR = YAZI_FLAVOR_DIR / "flavor.toml"
 
 # launchd agent identity (used by the `doctor` subcommand to check it is loaded).
 AGENT_LABEL = "com.kmurthi.wallpaper-accent"
@@ -151,7 +156,10 @@ ENGINE_VERSION = 3                      # bump when the palette math changes
 
 # Enabled components, in run order. Edit this list to disable a tool, or set
 # WALLPAPER_ACCENT_COMPONENTS="ghostty,fzf" to override at runtime.
-DEFAULT_COMPONENTS = ["ghostty", "fzf", "p10k", "zsh-syntax", "nvim", "tmux"]
+DEFAULT_COMPONENTS = [
+    "ghostty", "fzf", "p10k", "zsh-syntax", "zsh-autosuggest", "nvim", "tmux",
+    "delta", "lazygit", "yazi",
+]
 
 
 def enabled_component_names() -> list[str]:

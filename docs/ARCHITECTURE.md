@@ -18,7 +18,8 @@ a `wallpaper-accent` console entry for growing into a CLI.
 
 - Extract accent from wallpaper → build palette → write `colors.json` → render
   per-app fragments → reload apps.
-- Themes: ghostty, fzf, powerlevel10k, fast-syntax-highlighting, nvim (NvChad), tmux.
+- Themes: ghostty, fzf, powerlevel10k, fast-syntax-highlighting,
+  zsh-autosuggestions, nvim (NvChad), tmux, delta, lazygit, yazi.
 - Run: `~/.config/wallpaper-accent/wallpaper-accent.py --force`
 - Subcommands: `theme` (default) / `show` / `doctor` / `components` / `preview`.
   Bare-flag calls (`… --force`) dispatch to `theme` for launchd/shebang compat.
@@ -90,22 +91,28 @@ flowchart LR
     doctor.py       # `doctor` subcommand: prereq + integration-point health
     components/
       __init__.py   # Component dataclass, REGISTRY, enabled()
-      ghostty.py fzf.py p10k.py zsh_syntax.py nvim.py tmux.py  # emit() [+ reload()]
+      ghostty.py fzf.py p10k.py zsh_syntax.py zsh_autosuggest.py nvim.py
+      tmux.py delta.py lazygit.py yazi.py                 # emit() [+ reload()]
 ```
 
 Generated output (NOT in the repo) under `~/.local/state/wallpaper-accent/`:
 `colors.json` (palette, source of truth), `ghostty.conf`, `fzf.env`,
-`p10k-accent.zsh`, `zsh-syntax.zsh`, `tmux-accent.conf`, `settings.json`
-(persistent knob overrides), `state.json`, `run.log`. Plus
-`~/.config/nvim/lua/themes/wallpaper_accent.lua` (must be in nvim's runtimepath).
+`p10k-accent.zsh`, `zsh-syntax.zsh`, `zsh-autosuggest.zsh`, `tmux-accent.conf`,
+`delta.gitconfig`, `lazygit.yml`, `settings.json` (persistent knob overrides),
+`state.json`, `run.log`. Plus
+`~/.config/nvim/lua/themes/wallpaper_accent.lua` (must be in nvim's runtimepath)
+and the yazi flavor `~/.config/yazi/flavors/wallpaper-accent.yazi/flavor.toml`.
 
 **Integration points (machine-local, edited once):**
 - `~/.config/ghostty/config` → `?config.local` → `?…/wallpaper-accent/ghostty.conf`
-- `~/layers/30-local/.zshrc.local`: guarded `source` of `fzf.env` and
-  `p10k-accent.zsh`; F-Sy-H loaded with `atload'… source zsh-syntax.zsh'`
+- `~/layers/30-local/.zshrc.local`: guarded `source` of `fzf.env`,
+  `p10k-accent.zsh` and `zsh-autosuggest.zsh`; F-Sy-H loaded with
+  `atload'… source zsh-syntax.zsh'`; `export LG_CONFIG_FILE="$HOME/.config/lazygit/config.yml,…/lazygit.yml"`
 - `~/.config/nvim/lua/chadrc.lua` → `M.base46.theme = "wallpaper_accent"`
 - `~/.config/nvim/lua/autocmds.lua` → `Signal`/`SIGUSR1` autocmd
 - `~/Library/LaunchAgents/com.kmurthi.wallpaper-accent.plist`
+- `~/.config/git/config.local` (itself `include`d from `~/.gitconfig`) → `[include] path = …/wallpaper-accent/delta.gitconfig` (last include wins)
+- `~/.config/yazi/theme.toml` → `[flavor]` `dark`/`light = "wallpaper-accent"`
 
 ---
 ## The palette contract

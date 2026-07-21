@@ -90,7 +90,7 @@ def _components() -> int:
     for name, comp in components.REGISTRY.items():
         mark = "on " if name in enabled else "off"
         kind = "live-reload" if comp.reload else "new-process"
-        print(f"  [{mark}] {name:11} {kind}")
+        print(f"  [{mark}] {name:15} {kind}")
     return 0
 
 

@@ -24,18 +24,18 @@ semantic coloring (diff/ls), where the invariant pins most hues fixed.
   text neutral. Shipped this round.
 - **[next] bat** — class 3 (re-reads each run). base16 → a `.tmTheme` in
   `~/.config/bat/themes/` + `bat cache --build` (do the rebuild in `reload()`).
-- **[next] delta** (git pager) — class 3. `[delta]` gitconfig fragment `include`d
+- **[done] delta** (git pager) — class 3. `[delta]` gitconfig fragment `include`d
   from `~/.gitconfig`. +/- stay fixed green/red; file/line-number headers accent.
 - **[ ] btop / htop** — class 2. Theme file; graph gradients are a natural home
   for the primary→secondary→tertiary spread (showcases the harmony).
 - **[ ] starship** — class 4 (new shells). Alt prompt for non-p10k users.
 
 ### Tier 2 — good fit, mostly new-process / per-invocation
-- **[ ] lazygit** — class 3. `gui.theme`, base16 + accent on selected line / active border.
+- **[done] lazygit** — class 3. `gui.theme`, base16 + accent on selected line / active border. Merged via `LG_CONFIG_FILE`.
 - **[ ] eza / lsd** — class 4. `EZA_COLORS`/`LS_COLORS` env fragment; file-type hues stay fixed, accent only dir/selection.
 - **[ ] k9s** — class 3. Skin YAML; base16 + accent on active/title.
-- **[ ] zsh-autosuggestions** — class 4. `ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE` = a grey from `pal["greys"]`. Trivial; complements zsh-syntax.
-- **[ ] yazi / lf** — class 2/3. TOML theme; accent on cursor/selection.
+- **[done] zsh-autosuggestions** — class 4. `ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE` = a grey from `pal["greys"]`. Trivial; complements zsh-syntax.
+- **[done] yazi** (lf still [ ]) — class 3. Generated flavor (`flavors/wallpaper-accent.yazi/flavor.toml`); accent on cwd/cursor/selection.
 - **[ ] glow / gh / ripgrep / fd / difftastic** — small env-fragment or config themes.
 
 ### Tier 3 — weaker fit (justify before building)

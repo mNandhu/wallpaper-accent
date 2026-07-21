@@ -26,6 +26,9 @@ ZSHRC_LOCAL = HOME / "layers/30-local/.zshrc.local"
 CHADRC = HOME / ".config/nvim/lua/chadrc.lua"
 AUTOCMDS = HOME / ".config/nvim/lua/autocmds.lua"
 TMUX_CONF_USER = HOME / ".tmux.conf"
+GITCONFIG = HOME / ".gitconfig"
+GITCONFIG_LOCAL = HOME / ".config/git/config.local"
+YAZI_THEME = HOME / ".config/yazi/theme.toml"
 
 OK, WARN, FAIL = "OK", "WARN", "FAIL"
 
@@ -46,6 +49,10 @@ _FRAGMENTS = {
     "zsh-syntax": config.ZSH_SYNTAX,
     "nvim": config.NVIM_THEME,
     "tmux": config.TMUX_CONF,
+    "zsh-autosuggest": config.ZSH_AUTOSUGGEST,
+    "delta": config.DELTA_GITCONFIG,
+    "lazygit": config.LAZYGIT_YML,
+    "yazi": config.YAZI_FLAVOR,
 }
 _INTEGRATION = {
     "ghostty": [("ghostty config", GHOSTTY_FILES, "wallpaper-accent/ghostty.conf")],
@@ -57,6 +64,10 @@ _INTEGRATION = {
         ("SIGUSR1 autocmd", [AUTOCMDS], "SIGUSR1"),
     ],
     "tmux": [("~/.tmux.conf", [TMUX_CONF_USER], "tmux-accent.conf")],
+    "zsh-autosuggest": [(".zshrc.local", [ZSHRC_LOCAL], "zsh-autosuggest.zsh")],
+    "delta": [("git config include", [GITCONFIG, GITCONFIG_LOCAL], "delta.gitconfig")],
+    "lazygit": [(".zshrc.local", [ZSHRC_LOCAL], "lazygit.yml")],
+    "yazi": [("yazi theme.toml", [YAZI_THEME], "wallpaper-accent")],
 }
 
 

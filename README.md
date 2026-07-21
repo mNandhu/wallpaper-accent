@@ -3,7 +3,8 @@
 Theme terminal tools from the macOS desktop wallpaper's accent color. When the
 wallpaper changes, a background agent derives a Material You palette from the
 image and re-themes **ghostty, fzf, powerlevel10k, fast-syntax-highlighting,
-neovim (NvChad), and tmux**, hot-reloading whatever is running.
+zsh-autosuggestions, neovim (NvChad), tmux, delta, lazygit, and yazi**,
+hot-reloading whatever is running.
 
 Self-contained repo (its own git repo under `~/.config`, independent of the
 dotfiles layers) so the whole stack — engine + docs — lives in one place and can
@@ -28,9 +29,11 @@ Engineering/extension reference: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
     components/                      <- one module per tool (ghostty, fzf, ...)
 ~/.local/state/wallpaper-accent/     <- generated output (not in the repo)
   colors.json      <- shared palette (source of truth)
-  ghostty.conf  fzf.env  p10k-accent.zsh  zsh-syntax.zsh
+  ghostty.conf  fzf.env  p10k-accent.zsh  zsh-syntax.zsh  zsh-autosuggest.zsh
+  tmux-accent.conf  delta.gitconfig  lazygit.yml
   state.json  run.log
-~/.config/nvim/lua/themes/wallpaper_accent.lua   <- generated (must be in nvim rtp)
+~/.config/nvim/lua/themes/wallpaper_accent.lua       <- generated (must be in nvim rtp)
+~/.config/yazi/flavors/wallpaper-accent.yazi/flavor.toml  <- generated yazi flavor
 ```
 
 Architecture: one core extracts the accent → `colors.json`; each tool is a
@@ -49,7 +52,11 @@ fragment and, if it can, reloads running instances. See
 | **fzf** | prompt/pointer/hl/bg+/border | new shells |
 | **p10k** | directory path + prompt char | new shells |
 | **fast-syntax-highlighting** | *not the accent* — a fixed, varied syntax theme (commands blue, builtins teal, strings green, comments grey, errors red) | new shells |
+| **zsh-autosuggestions** | *not the accent* — a subdued tinted grey for the inline suggestion | new shells |
 | **tmux** | status bar, active pane border, current window, clock; copy-mode selection | **live** — `tmux source-file` |
+| **delta** (git pager) | file + hunk-header decorations, line-number gutter; +/- stay fixed red/green | re-read each invocation |
+| **lazygit** | active border, options text, selected line, cherry-picked commits; unstaged changes fixed red | re-read each launch |
+| **yazi** | cwd, mode, tabs, position indicator, file markers + selection; permission column fixed | re-read each launch |
 
 Design rule: the accent drives **surfaces / greys / cursor / selection / accent-y
 UI**; **semantic hues stay fixed** (Catppuccin red/green/yellow/blue/magenta/cyan
@@ -177,14 +184,18 @@ Edit `DEFAULT_COMPONENTS` in `src/wallpaper_accent/config.py`, or for one run:
 # only these:
 WALLPAPER_ACCENT_COMPONENTS="ghostty,fzf" ~/.config/wallpaper-accent/wallpaper-accent.py --force
 ```
-Known components: `ghostty, fzf, p10k, zsh-syntax, nvim, tmux`. Adding a new one:
+Known components: `ghostty, fzf, p10k, zsh-syntax, zsh-autosuggest, nvim, tmux,
+delta, lazygit, yazi`. Adding a new one:
 see [`ARCHITECTURE.md`](./ARCHITECTURE.md) ("Add a new tool").
 
 ### Revert an app
 - nvim: set `M.base46.theme` back to `"onedark"` in `~/.config/nvim/lua/chadrc.lua`.
-- fzf/p10k/syntax: comment the guarded `source`/`atload` lines in `.zshrc.local`.
+- fzf/p10k/syntax/autosuggest: comment the guarded `source`/`atload` lines in `.zshrc.local`.
 - ghostty: comment the include in `~/.config/ghostty/config.local`.
 - tmux: comment the guarded `source-file` line in `~/.tmux.conf`.
+- delta: comment the `[include] path = …/delta.gitconfig` in `~/.config/git/config.local`.
+- lazygit: drop `…/lazygit.yml` from `LG_CONFIG_FILE` in `.zshrc.local`.
+- yazi: remove the `wallpaper-accent` flavor from `~/.config/yazi/theme.toml`'s `[flavor]`.
 
 ---
 

@@ -53,6 +53,13 @@ def test_set_coerces_to_declared_type():
     assert isinstance(config.knob_value("bg_tone"), float)
 
 
+def test_bad_numeric_value_error_names_the_knob():
+    # A raw float() ValueError ("could not convert...") is unhelpful without
+    # knowing which knob it came from; set_knob wraps it with the knob name.
+    with pytest.raises(ValueError, match="bg_tone.*notanumber"):
+        config.set_knob("bg_tone", "notanumber")
+
+
 def test_scheme_is_validated_and_normalized():
     assert config.set_knob("scheme", "  RaInBoW ") == "rainbow"
     with pytest.raises(ValueError):

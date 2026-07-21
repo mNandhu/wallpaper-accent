@@ -1,9 +1,9 @@
 """CLI + orchestration: wallpaper -> palette -> enabled components -> reloads.
 
-Subcommands: `theme` (default), `show`, `doctor`, `components`, `preview`. For
-backward compatibility a bare flag invocation (e.g. `wallpaper-accent --force`,
-as the launchd agent runs) is treated as `theme --force`, so no launchd/shebang
-caller needs updating.
+Subcommands: `theme` (default), `show`, `doctor`, `components`, `preview`,
+`config`, `install`, `uninstall`. For backward compatibility a bare flag
+invocation (e.g. `wallpaper-accent --force`, as the launchd agent runs) is
+treated as `theme --force`, so no launchd/shebang caller needs updating.
 """
 from __future__ import annotations
 
@@ -12,14 +12,15 @@ import json
 import sys
 from pathlib import Path
 
-from . import components, config
+from . import __version__, components, config, history
 from .palette import build_palette, collision_report
 from .show import show_palette
 from .util import atomic_write, log
 from .wallpaper import find_wallpaper, is_dark_appearance
 
 _COLORS_KEYS = ("source", "seed", "scheme", "dark", "accent", "surface", "base16")
-SUBCOMMANDS = {"theme", "show", "doctor", "components", "preview", "config"}
+SUBCOMMANDS = {"theme", "show", "doctor", "components", "preview", "config", "install",
+               "uninstall", "completion"}
 
 
 def _colors_subset(pal: dict) -> str:
@@ -33,6 +34,8 @@ def _write_colors_json(pal: dict) -> None:
 def _theme(args: argparse.Namespace) -> int:
     if args.show:
         return show_palette()
+    if args.undo:
+        return _undo(no_reload=args.no_reload)
 
     image = Path(args.image).expanduser() if args.image else find_wallpaper()
     if image is None:
@@ -42,6 +45,11 @@ def _theme(args: argparse.Namespace) -> int:
         log(f"wallpaper path does not exist: {image}; keeping previous theme")
         return 0
     dark = True if args.dark else False if args.light else is_dark_appearance()
+
+    unknown = [n for n in (args.only or []) + (args.skip or []) if n not in components.REGISTRY]
+    if unknown:
+        log(f"unknown component(s): {', '.join(unknown)} (known: {', '.join(components.REGISTRY)})")
+        return 1
 
     key = {"image": str(image), "mtime": image.stat().st_mtime, "dark": dark,
            "tuning": config.tuning_signature()}
@@ -64,10 +72,13 @@ def _theme(args: argparse.Namespace) -> int:
         return 0
 
     _write_colors_json(pal)
+    history.advance(pal)
     comps = components.enabled()
     if args.only:
-        want = set(args.only)
-        comps = [c for c in comps if c.name in want]
+        comps = [components.REGISTRY[n] for n in args.only]  # explicit --only bypasses enablement
+    elif args.skip:
+        skip = set(args.skip)
+        comps = [c for c in comps if c.name not in skip]
     for comp in comps:
         comp.emit(pal)
     atomic_write(config.STATE_FILE, json.dumps(key, indent=2))
@@ -84,8 +95,32 @@ def _theme(args: argparse.Namespace) -> int:
     return 0
 
 
-def _components() -> int:
+def _undo(no_reload: bool = False) -> int:
+    pal = history.undo()
+    if pal is None:
+        log("no previous theme to restore")
+        return 1
+    _write_colors_json(pal)
+    comps = components.enabled()
+    for comp in comps:
+        comp.emit(pal)
+    if not no_reload:
+        for comp in comps:
+            if comp.reload:
+                comp.reload()
+    log(f"restored theme (accent {pal['seed']}, "
+        f"{'dark' if pal['dark'] else 'light'}) [{', '.join(c.name for c in comps)}]")
+    return 0
+
+
+def _components(json_out: bool = False) -> int:
     enabled = set(config.enabled_component_names())
+    if json_out:
+        data = [{"name": name, "enabled": name in enabled,
+                 "reload": "live-reload" if comp.reload else "new-process"}
+                for name, comp in components.REGISTRY.items()]
+        print(json.dumps(data, indent=2))
+        return 0
     print("components (name — enabled? — reload class):")
     for name, comp in components.REGISTRY.items():
         mark = "on " if name in enabled else "off"
@@ -94,12 +129,12 @@ def _components() -> int:
     return 0
 
 
-def _preview(image_arg: str) -> int:
+def _preview(image_arg: str, dark: bool | None = None) -> int:
     image = Path(image_arg).expanduser()
     if not image.is_file():
         log(f"no such image: {image}")
         return 1
-    pal = build_palette(image, is_dark_appearance())
+    pal = build_palette(image, is_dark_appearance() if dark is None else dark)
     print(_colors_subset(pal))
     for line in collision_report(pal):
         log(f"collision: {line}")
@@ -160,6 +195,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="wallpaper-accent",
         description="Theme terminal tools from the macOS wallpaper's accent color.",
     )
+    ap.add_argument("--version", action="version", version=f"wallpaper-accent {__version__}")
     sub = ap.add_subparsers(dest="cmd")
 
     t = sub.add_parser("theme", help="re-theme from the current wallpaper (default)")
@@ -171,20 +207,30 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="print the resolved palette (colors.json) and exit")
     t.add_argument("--show", action="store_true",
                    help="print the current palette as color swatches and exit")
+    t.add_argument("--undo", action="store_true",
+                   help="restore the previously-applied palette (one step back)")
     t.add_argument("--image", metavar="PATH",
                    help="use this image instead of the current wallpaper")
-    t.add_argument("--only", metavar="NAME", action="append",
-                   help="theme only this component (repeatable)")
+    selection = t.add_mutually_exclusive_group()
+    selection.add_argument("--only", metavar="NAME", action="append",
+                            help="theme only this component (repeatable)")
+    selection.add_argument("--skip", metavar="NAME", action="append",
+                            help="theme every enabled component except this one (repeatable)")
     appearance = t.add_mutually_exclusive_group()
-    appearance.add_argument("--dark", action="store_true")
-    appearance.add_argument("--light", action="store_true")
+    appearance.add_argument("--dark", action="store_true", help="force dark surfaces")
+    appearance.add_argument("--light", action="store_true", help="force light surfaces")
 
     sub.add_parser("show", help="print the current palette as color swatches")
-    sub.add_parser("doctor", help="check prerequisites and integration points")
-    sub.add_parser("components", help="list known and enabled components")
+    d = sub.add_parser("doctor", help="check prerequisites and integration points")
+    d.add_argument("--json", action="store_true", help="machine-readable output")
+    cs = sub.add_parser("components", help="list known and enabled components")
+    cs.add_argument("--json", action="store_true", help="machine-readable output")
     p = sub.add_parser("preview",
                         help="build a palette from an image and print JSON (writes nothing)")
     p.add_argument("image", metavar="PATH")
+    p_appearance = p.add_mutually_exclusive_group()
+    p_appearance.add_argument("--dark", action="store_true", help="force dark surfaces")
+    p_appearance.add_argument("--light", action="store_true", help="force light surfaces")
     c = sub.add_parser("config",
                        help="get/set persistent palette knobs (no env vars needed)")
     c.add_argument("config_action", nargs="?", default="list",
@@ -192,6 +238,13 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="list (default), get, set, unset, or edit (interactive) a knob")
     c.add_argument("key", nargs="?", help="knob name (see `config list`)")
     c.add_argument("value", nargs="?", help="new value (for `config set`)")
+    i = sub.add_parser("install",
+                       help="write + load the launchd agent (auto re-theme on wallpaper change)")
+    i.add_argument("--no-load", action="store_true",
+                   help="write the plist but don't launchctl bootstrap it")
+    sub.add_parser("uninstall", help="unload + remove the launchd agent")
+    comp = sub.add_parser("completion", help="print a shell completion script (bash or zsh)")
+    comp.add_argument("shell", choices=["bash", "zsh"])
     return ap
 
 
@@ -200,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     # Backward compat: a bare flag invocation means the default `theme` command.
     if not argv:
         argv = ["theme"]
-    elif argv[0] not in SUBCOMMANDS and argv[0] not in ("-h", "--help"):
+    elif argv[0] not in SUBCOMMANDS and argv[0] not in ("-h", "--help", "--version"):
         argv = ["theme", *argv]
 
     args = _build_parser().parse_args(argv)
@@ -209,11 +262,21 @@ def main(argv: list[str] | None = None) -> int:
         return show_palette()
     if cmd == "doctor":
         from .doctor import run
-        return run()
+        return run(json_out=args.json)
     if cmd == "components":
-        return _components()
+        return _components(json_out=args.json)
     if cmd == "preview":
-        return _preview(args.image)
+        return _preview(args.image, dark=True if args.dark else False if args.light else None)
     if cmd == "config":
         return _config(args)
+    if cmd == "install":
+        from .agent import install
+        return install(load=not args.no_load)
+    if cmd == "uninstall":
+        from .agent import uninstall
+        return uninstall()
+    if cmd == "completion":
+        from .completion import render
+        print(render(args.shell), end="")
+        return 0
     return _theme(args)

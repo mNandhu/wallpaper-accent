@@ -18,6 +18,9 @@ STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "wal
 OUT_CONF = STATE_DIR / "ghostty.conf"
 STATE_FILE = STATE_DIR / "state.json"
 COLORS_JSON = STATE_DIR / "colors.json"
+HISTORY_FILE = STATE_DIR / "history.json"      # ring of past full palettes (`theme --undo`)
+LAST_PALETTE_FILE = STATE_DIR / "last_palette.json"  # full palette currently applied
+HISTORY_MAX = 10                                 # how many past palettes `--undo` can reach
 # Persistent knob overrides, written by `config set`. Lives in STATE_DIR (the
 # XDG *config* dir is this git repo itself, so it can't hold user settings).
 SETTINGS_FILE = STATE_DIR / "settings.json"
@@ -94,11 +97,15 @@ def knob_source(key: str) -> str:
 
 def set_knob(key: str, value: str):
     """Persist a knob to SETTINGS_FILE. Raises KeyError (unknown knob) or
-    ValueError (bad value). Returns the coerced value stored."""
+    ValueError (bad value, wrapped with the knob name for a clear message).
+    Returns the coerced value stored."""
     if key not in KNOBS:
         raise KeyError(key)
     coerce = KNOBS[key][1]
-    val = coerce(value)
+    try:
+        val = coerce(value)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"{key}: invalid value {value!r} ({exc})") from exc
     if coerce is str:
         val = val.strip().lower()
         if key == "scheme" and val not in SCHEMES:

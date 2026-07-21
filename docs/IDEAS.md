@@ -64,8 +64,10 @@ semantic coloring (diff/ls), where the invariant pins most hues fixed.
 - **[next] Light-mode surfaces.** Verify/complete the light branch of
   `build_palette` (everything is tuned for dark; `BG_TONE 14`). Light-appearance
   flips should yield a genuinely light tinted surface, not an inverted dark one.
-- **[ ] Palette history + `--undo`.** Keep last N `colors.json`; restore the
-  previous theme when a wallpaper produces an ugly accent.
+- **[done] Palette history + `--undo`.** `history.py` keeps a capped ring
+  (`HISTORY_MAX`) of full past palettes in `last_palette.json`/`history.json`;
+  `theme --undo` walks straight back through it (no oscillation on repeated
+  undo), respects `--no-reload`.
 - **[ ] Pin / lock a palette.** "I like this one" → freeze across wallpaper
   changes until unlocked (add a `pinned` flag that short-circuits idempotency).
 - **[ ] `--strict` gate.** `collision_report` is diagnostic only; add a mode that
@@ -74,8 +76,8 @@ semantic coloring (diff/ls), where the invariant pins most hues fixed.
   as an accent-source choice (partly in `_select_seed`).
 
 ### Robustness & observability
-- **[ ] Structured status / `--json`.** Machine-readable state for `doctor` and a
-  future menubar UI; structured `run.log`.
+- **[done] Structured status / `--json`.** `doctor --json` and `components
+  --json` emit machine-readable output for scripting/a future menubar UI.
 - **[ ] More golden-palette fixtures.** Extend `test_palette.py` with greyscale,
   near-black, and monochromatic-scheme (`tonalspot` → `nudge_semantics`) cases.
 - **[ ] Dynamic/"Colors" wallpapers.** Today: log + keep previous. Could derive
@@ -84,7 +86,20 @@ semantic coloring (diff/ls), where the invariant pins most hues fixed.
   expected integration snippet, so `doctor` and docs generate from one source
   instead of the hand-maintained tables in `doctor.py` / `ARCHITECTURE.md`.
 
+### CLI UX (this round)
+- **[done] `--only`/`--skip` validate component names.** An unknown name is a
+  hard FAIL listing known components (previously a silent empty-set no-op).
+  Mutually exclusive with each other.
+- **[done] `config set` numeric errors name the knob.** Wrapped instead of a
+  raw `could not convert string to float: '...'`.
+- **[done] `--version`.**
+- **[done] `preview --dark/--light`** — was hardcoded to the live appearance.
+- **[done] Shell completion.** `completion bash|zsh` prints a script (baked-in
+  component/knob names); subcommands, `--only`/`--skip` components, `config`
+  actions/knobs/schemes.
+
 ### Distribution
-- **[ ] De-hardcode paths.** Absolute `/opt/homebrew/bin/uv` + home dir are baked
-  in (documented caveat). An `install` command templating the plist would let
-  this run on another Mac (currently Work-Mac only).
+- **[done] De-hardcode paths / `install` command.** `wallpaper-accent install`
+  templates the launchd plist from the actual `uv` path + repo checkout
+  location (`agent.py`) and loads it; `uninstall` reverses it. `doctor` now
+  points here instead of raw `launchctl` commands.

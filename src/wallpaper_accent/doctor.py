@@ -101,7 +101,7 @@ def _check_palette() -> Check:
 
 def _check_agent() -> list[Check]:
     if not config.LAUNCH_AGENT_PLIST.is_file():
-        return [Check(WARN, "launchd", f"plist not installed at {config.LAUNCH_AGENT_PLIST}")]
+        return [Check(WARN, "launchd", "plist not installed — run `wallpaper-accent install`")]
     launchctl = shutil.which("launchctl")
     if not launchctl:
         return [Check(WARN, "launchd", "launchctl not found (non-macOS?)")]
@@ -109,7 +109,7 @@ def _check_agent() -> list[Check]:
     rc = subprocess.run([launchctl, "print", target], capture_output=True).returncode
     if rc == 0:
         return [Check(OK, "launchd", f"agent loaded ({config.AGENT_LABEL})")]
-    return [Check(WARN, "launchd", f"agent not loaded — launchctl bootstrap gui/{os.getuid()} {config.LAUNCH_AGENT_PLIST}")]
+    return [Check(WARN, "launchd", "agent not loaded — run `wallpaper-accent install`")]
 
 
 def _check_component(name: str) -> list[Check]:
@@ -138,7 +138,7 @@ def _check_settings() -> Check:
     return Check(OK, "knobs", parts)
 
 
-def run() -> int:
+def run(json_out: bool = False) -> int:
     checks: list[Check] = [_check_uv(), _check_palette(), _check_settings()]
     checks += _check_agent()
     for name in config.enabled_component_names():
@@ -147,6 +147,17 @@ def run() -> int:
             continue
         checks += _check_component(name)
 
+    n_ok = sum(c.status == OK for c in checks)
+    n_warn = sum(c.status == WARN for c in checks)
+    n_fail = sum(c.status == FAIL for c in checks)
+
+    if json_out:
+        data = {"ok": n_ok, "warn": n_warn, "fail": n_fail,
+                "checks": [{"status": c.status, "name": c.name, "detail": c.detail}
+                           for c in checks]}
+        print(json.dumps(data, indent=2))
+        return 1 if n_fail else 0
+
     color = {OK: "\x1b[32m", WARN: "\x1b[33m", FAIL: "\x1b[31m"}
     reset = "\x1b[0m"
     print("\n  wallpaper-accent doctor\n")
@@ -154,8 +165,5 @@ def run() -> int:
     for c in checks:
         tag = f"{color[c.status]}{c.status:4}{reset}"
         print(f"  [{tag}] {c.name.ljust(width)}  {c.detail}")
-    n_ok = sum(c.status == OK for c in checks)
-    n_warn = sum(c.status == WARN for c in checks)
-    n_fail = sum(c.status == FAIL for c in checks)
     print(f"\n  {n_ok} ok, {n_warn} warning(s), {n_fail} failed\n")
     return 1 if n_fail else 0

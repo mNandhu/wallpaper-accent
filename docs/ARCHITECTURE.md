@@ -21,8 +21,9 @@ a `wallpaper-accent` console entry for growing into a CLI.
 - Themes: ghostty, fzf, powerlevel10k, fast-syntax-highlighting,
   zsh-autosuggestions, nvim (NvChad), tmux, delta, lazygit, yazi.
 - Run: `~/.config/wallpaper-accent/wallpaper-accent.py --force`
-- Subcommands: `theme` (default) / `show` / `doctor` / `components` / `preview`.
-  Bare-flag calls (`… --force`) dispatch to `theme` for launchd/shebang compat.
+- Subcommands: `theme` (default) / `show` / `doctor` / `components` / `preview` /
+  `config` / `install` / `uninstall`. Bare-flag calls (`… --force`) dispatch to
+  `theme` for launchd/shebang compat.
 - Triggered by launchd agent `com.kmurthi.wallpaper-accent` on login / wallpaper
   change / 15-min timer.
 
@@ -35,7 +36,7 @@ Corporate-managed macOS, arm64. Several "obvious" approaches are dead here:
 | Constraint | Consequence |
 |---|---|
 | **Airlock** (app allowlisting) | Kills unsigned self-built binaries (matugen-via-cargo was killed). Don't add native binaries. `uv`, `python`, `nvim`, `ghostty`, `tmux`, `fzf` are allowlisted. |
-| **Zscaler TLS MITM** | `uv` must run with `--system-certs` (macOS keychain has the Zscaler root). The plist also sets `SSL_CERT_FILE`. Shell env pre-sets `SSL_CERT_FILE`/`CARGO_HTTP_CAINFO`/`GIT_SSL_CAINFO` → `~/.config/certs/zscaler-ca.user.pem`. |
+| **Zscaler TLS MITM** | `uv` must run with `--system-certs` (macOS keychain has the Zscaler root). `wallpaper-accent install` copies `$SSL_CERT_FILE` into the generated plist if set. Shell env pre-sets `SSL_CERT_FILE`/`CARGO_HTTP_CAINFO`/`GIT_SSL_CAINFO` → `~/.config/certs/zscaler-ca.user.pem`. `uv tool install`/`uv run` from this network also need `--allow-insecure-host pypi.org --allow-insecure-host files.pythonhosted.org` — rustls doesn't honor `SSL_CERT_FILE`/`--system-certs` against the local MITM proxy the way curl/git do. |
 | **`pgrep` is broken** | Silently misses GUI apps. Process detection MUST use `ps -axo pid=,comm=` + basename (`_pids()`). Never reintroduce `pgrep`. |
 | **macOS 26 wallpaper store** | Path read from `~/Library/Application Support/com.apple.wallpaper/Store/Index.plist` (nested bplist) — TCC-free, works under launchd. `osascript` is only a fallback. |
 | **Dynamic/aerial/solid wallpapers** | No image file → `find_wallpaper()` returns None → `main()` logs and exits 0. |
@@ -96,10 +97,12 @@ flowchart LR
 ```
 
 Generated output (NOT in the repo) under `~/.local/state/wallpaper-accent/`:
-`colors.json` (palette, source of truth), `ghostty.conf`, `fzf.env`,
-`p10k-accent.zsh`, `zsh-syntax.zsh`, `zsh-autosuggest.zsh`, `tmux-accent.conf`,
-`delta.gitconfig`, `lazygit.yml`, `settings.json` (persistent knob overrides),
-`state.json`, `run.log`. Plus
+`colors.json` (trimmed palette, source of truth for other tools/consumers),
+`last_palette.json`/`history.json` (full-palette state behind `theme --undo` —
+see `history.py`), `ghostty.conf`, `fzf.env`, `p10k-accent.zsh`,
+`zsh-syntax.zsh`, `zsh-autosuggest.zsh`, `tmux-accent.conf`, `delta.gitconfig`,
+`lazygit.yml`, `settings.json` (persistent knob overrides), `state.json`,
+`run.log`. Plus
 `~/.config/nvim/lua/themes/wallpaper_accent.lua` (must be in nvim's runtimepath)
 and the yazi flavor `~/.config/yazi/flavors/wallpaper-accent.yazi/flavor.toml`.
 
@@ -198,8 +201,11 @@ one `KNOBS` row and one resolved constant — CLI/config/signature pick it up.
 | `wallpaper.py` | `find_wallpaper()` (Index.plist → osascript → None), `is_dark_appearance()` |
 | `palette.py` | `build_palette(image, dark) -> pal` (**core**: seed, scheme, tinted neutrals, base16) + guards (`repel_accent`, `nudge_semantics`, `enforce_contrast`) + `collision_report` |
 | `show.py` | `show_palette()` — `--show` swatches from colors.json |
-| `cli.py` | `main()`: argparse subcommands (`theme`/`show`/`doctor`/`components`/`preview`/`config`), idempotency, `_write_colors_json`, orchestration |
-| `doctor.py` | `run()`: verify `uv`, `colors.json`, active knob overrides, launchd agent, and each component's fragment + machine-local integration reference |
+| `cli.py` | `main()`: argparse subcommands (`theme`/`show`/`doctor`/`components`/`preview`/`config`/`install`/`uninstall`/`completion`), idempotency, `--only`/`--skip` component-name validation, `_write_colors_json`, orchestration |
+| `doctor.py` | `run(json_out=False)`: verify `uv`, `colors.json`, active knob overrides, launchd agent, and each component's fragment + machine-local integration reference |
+| `agent.py` | `install()`/`uninstall()`: template + write the launchd plist from the actual `uv` path and repo checkout location, `launchctl bootstrap`/`bootout` |
+| `history.py` | `advance(pal)`/`undo()`/`current()`: capped ring of full past palettes behind `theme --undo` |
+| `completion.py` | `render(shell)`: bash/zsh completion script, component/knob names baked in at generation time |
 | `components/__init__.py` | `Component(name, emit, reload)`, `REGISTRY`, `enabled()` |
 | `components/<tool>.py` | `emit(pal)` writes the fragment; optional `reload()` applies it |
 
@@ -208,9 +214,11 @@ reloads go through `procs.signal_all(basename, sig)`.
 
 Commands: `theme` (`--force`, `--no-reload`, `--print`, `--show`, `--image PATH`,
 `--only NAME`, `--dark`/`--light`), `show`, `doctor`, `components`, `preview PATH`
-(builds a palette and prints JSON, writing nothing), and `config`
-(`list`/`get`/`set`/`unset` the persistent knobs). A bare-flag invocation is
-rewritten to `theme …` so existing launchd/shebang callers keep working.
+(builds a palette and prints JSON, writing nothing), `config`
+(`list`/`get`/`set`/`unset` the persistent knobs), `install` (template + load
+the launchd agent, `--no-load` to just write it), and `uninstall` (bootout +
+delete the plist). A bare-flag invocation is rewritten to `theme …` so existing
+launchd/shebang callers keep working.
 
 **Enable/disable a tool:** edit `config.DEFAULT_COMPONENTS`, or set
 `WALLPAPER_ACCENT_COMPONENTS="ghostty,fzf"` for a single run.
@@ -317,10 +325,10 @@ cache, so a fresh nvim reads a stale cache. Baseline with a real run first.
 Agent `com.kmurthi.wallpaper-accent` (LaunchAgent, Aqua): `RunAtLoad` (login),
 `WatchPaths` (wallpaper Store dir + Index.plist), `StartInterval 900` (safety net
 + light/dark). Not a daemon — runs on demand and exits. `EnvironmentVariables`:
-`HOME`, `PATH` (incl. `/opt/homebrew/bin`), `SSL_CERT_FILE`. Runs headless nvim to
-refresh the base46 cache when no nvim is open (allowlisted, +~1s). Reload after
-editing: `launchctl bootout gui/$(id -u)/com.kmurthi.wallpaper-accent` then
-`bootstrap gui/$(id -u) <plist>`.
+`HOME`, `PATH` (incl. `uv`'s dir), `SSL_CERT_FILE` if set. Runs headless nvim to
+refresh the base46 cache when no nvim is open (allowlisted, +~1s). The plist is
+generated by `agent.py` (`wallpaper-accent install`) — never hand-edit it;
+`install` bootouts + re-bootstraps to apply a regen.
 
 ---
 

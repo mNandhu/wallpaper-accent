@@ -31,7 +31,7 @@ Engineering/extension reference: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
   colors.json      <- shared palette (source of truth)
   ghostty.conf  fzf.env  p10k-accent.zsh  zsh-syntax.zsh  zsh-autosuggest.zsh
   tmux-accent.conf  delta.gitconfig  lazygit.yml
-  state.json  run.log
+  state.json  history.json  last_palette.json  run.log
 ~/.config/nvim/lua/themes/wallpaper_accent.lua       <- generated (must be in nvim rtp)
 ~/.config/yazi/flavors/wallpaper-accent.yazi/flavor.toml  <- generated yazi flavor
 ```
@@ -40,6 +40,31 @@ Architecture: one core extracts the accent → `colors.json`; each tool is a
 **component** (`src/wallpaper_accent/components/<tool>.py`) that renders its
 fragment and, if it can, reloads running instances. See
 [`ARCHITECTURE.md`](./ARCHITECTURE.md) to add or extend one.
+
+---
+
+## Install the CLI globally
+
+`uv tool install --editable .` from the repo installs a `wallpaper-accent`
+executable to `~/.local/bin` (already on `PATH` for most shells) — run any
+command below from anywhere, no `cd`/`./wallpaper-accent.py` needed:
+
+```bash
+cd ~/.config/wallpaper-accent
+uv tool install --editable . \
+  --allow-insecure-host pypi.org --allow-insecure-host files.pythonhosted.org
+```
+
+The `--allow-insecure-host` flags are needed on this network: a local MITM
+proxy intercepts TLS and `uv`'s rustls stack — unlike curl/git — doesn't trust
+that chain even with `--system-certs`. `--editable` means the installed
+command tracks this checkout: no reinstall after editing
+`src/wallpaper_accent/`, only after changing dependencies in `pyproject.toml`
+(rerun the command above to pick those up).
+
+```bash
+wallpaper-accent --help    # verify
+```
 
 ---
 
@@ -70,6 +95,9 @@ green wallpaper isn't uniformly green.
 
 The script is executable (its shebang runs `uv --system-certs`):
 
+Installed globally (see above)? Every command below also works as
+`wallpaper-accent ...` from anywhere — swap `$S` for `wallpaper-accent`.
+
 ```bash
 S=~/.config/wallpaper-accent/wallpaper-accent.py
 
@@ -77,30 +105,45 @@ S=~/.config/wallpaper-accent/wallpaper-accent.py
 $S --force                       # (bare flags == the `theme` subcommand)
 $S theme --force
 
-# Theme only one tool (repeatable):
+# Theme only one tool, or every enabled tool but one (repeatable, mutually exclusive):
 $S theme --only ghostty --force
+$S theme --skip nvim --force
+
+# Bad wallpaper? Restore the previously-applied palette:
+$S theme --undo
 
 # Show the current palette as color swatches in the terminal:
 $S show
 
-# Preview any image WITHOUT writing anything (prints the palette JSON):
+# Preview any image WITHOUT writing anything (prints the palette JSON);
+# --dark/--light forces an appearance instead of using the live one:
 $S preview ~/Pictures/foo.png
+$S preview ~/Pictures/foo.png --light
 
-# Check prerequisites + integration points are wired:
+# Check prerequisites + integration points are wired (--json for scripting):
 $S doctor
+$S doctor --json
 
-# List known / enabled components and their reload class:
+# List known / enabled components and their reload class (--json for scripting):
 $S components
+$S components --json
 
 # Apply a specific image / skip app reloads:
 $S theme --image ~/Pictures/foo.png --force
 $S theme --force --no-reload
+
+# What's installed:
+$S --version
+
+# Shell completion (subcommands, --only/--skip component names, config knobs):
+source <(wallpaper-accent completion zsh)   # or: completion bash, in ~/.zshrc / ~/.bashrc
 ```
 
 > Subcommands: `theme` (default), `show`, `doctor`, `components`, `preview`,
-> `config`. A
+> `config`, `install`, `uninstall`, `completion`. A
 > bare-flag call (`… --force`) is treated as `theme --force`, so the launchd
-> agent and shebang callers are unchanged.
+> agent and shebang callers are unchanged. An unknown `--only`/`--skip` name
+> is a hard error listing the known components — it never silently no-ops.
 
 ### Diversify / tune the colors
 
@@ -165,11 +208,12 @@ Persistent: `$S config set scheme rainbow` (or, equivalently, add under
 `EnvironmentVariables` in the launchd plist and reload the agent — but `config`
 is easier and needs no reload).
 
-### Reload the launchd agent (after editing the plist)
+### Reload the launchd agent (after any change)
 ```bash
-launchctl bootout   gui/$(id -u)/com.kmurthi.wallpaper-accent
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kmurthi.wallpaper-accent.plist
+wallpaper-accent install
 ```
+`install` bootouts + re-bootstraps if already loaded, so this alone applies
+any change (a `config set`, a relocated repo, a different `uv`).
 
 ### Status / debug
 ```bash
@@ -205,68 +249,33 @@ The engine runs itself via a **launchd LaunchAgent**. `WatchPaths` watches the
 macOS wallpaper store, so changing your desktop picture fires the script within
 a second; `RunAtLoad` re-themes at login and `StartInterval` is a safety net.
 
-**1. Prerequisite:** `uv` must be installed and allowlisted (`which uv` →
+**Prerequisite:** `uv` must be installed and allowlisted (`which uv` →
 `/opt/homebrew/bin/uv` here). No other deps — `uv` provisions `materialyoucolor`
 from the script's PEP-723 block on first run.
 
-**2. Create the agent** at `~/Library/LaunchAgents/com.kmurthi.wallpaper-accent.plist`
-(replace `kmurthi` / `/Users/kmurthi` with your username / `$HOME`, and the `uv`
-path if `which uv` differs):
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>com.kmurthi.wallpaper-accent</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/opt/homebrew/bin/uv</string>
-    <string>run</string><string>--system-certs</string>
-    <string>--no-project</string><string>--script</string>
-    <string>/Users/kmurthi/.config/wallpaper-accent/wallpaper-accent.py</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-  <!-- Fires when the desktop wallpaper changes (macOS rewrites this store). -->
-  <key>WatchPaths</key>
-  <array>
-    <string>/Users/kmurthi/Library/Application Support/com.apple.wallpaper/Store</string>
-    <string>/Users/kmurthi/Library/Application Support/com.apple.wallpaper/Store/Index.plist</string>
-  </array>
-  <!-- Safety net + catches light/dark flips (no file change). -->
-  <key>StartInterval</key><integer>900</integer>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>HOME</key><string>/Users/kmurthi</string>
-    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-    <!-- Zscaler MITM: belt-and-suspenders with --system-certs. -->
-    <key>SSL_CERT_FILE</key><string>/Users/kmurthi/.config/certs/zscaler-ca.user.pem</string>
-    <!-- Optional: pin any GHOSTTY_ACCENT_* knob here, e.g.: -->
-    <!-- <key>GHOSTTY_ACCENT_SCHEME</key><string>vibrant</string> -->
-  </dict>
-  <key>ProcessType</key><string>Background</string>
-  <key>LimitLoadToSessionType</key><string>Aqua</string>
-  <key>StandardOutPath</key><string>/Users/kmurthi/.local/state/wallpaper-accent/run.log</string>
-  <key>StandardErrorPath</key><string>/Users/kmurthi/.local/state/wallpaper-accent/run.log</string>
-</dict>
-</plist>
-```
-
-**3. Load it** (and reload after any plist edit — see below):
+**Install the hook:**
 ```bash
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kmurthi.wallpaper-accent.plist
+wallpaper-accent install         # global CLI (see above)
+./wallpaper-accent.py install    # or, without the global install
 ```
+This templates `~/Library/LaunchAgents/com.kmurthi.wallpaper-accent.plist` from
+the `uv` actually on `PATH` and this repo's actual checkout location — no more
+hand-editing absolute paths into the plist — writes it, and `launchctl
+bootstrap`s it. Already loaded? `install` bootouts + reloads it, so it also
+doubles as "apply a change" (see above). `--no-load` only writes the plist.
+Undo with `wallpaper-accent uninstall` (bootout + delete the plist).
 
-**4. Verify:** change your wallpaper, then check the log and palette:
+**Verify:** change your wallpaper, then check the log and palette:
 ```bash
-tail -f ~/.local/state/wallpaper-accent/run.log      # should log a re-theme
-~/.config/wallpaper-accent/wallpaper-accent.py --show # swatches for the new wall
-launchctl print gui/$(id -u)/com.kmurthi.wallpaper-accent | grep -iE 'state|runs|last exit'
+tail -f ~/.local/state/wallpaper-accent/run.log   # should log a re-theme
+wallpaper-accent show                             # swatches for the new wall
+wallpaper-accent doctor                           # confirms the agent is loaded
 ```
 
-> Changing a `GHOSTTY_ACCENT_*` knob now re-themes on the **next** trigger even
-> if the wallpaper is unchanged (the knobs are folded into the idempotency key),
-> so you no longer need `--force` after editing the plist — just reload the agent.
+> Changing a `GHOSTTY_ACCENT_*` knob (`config set ...`) re-themes on the
+> **next** trigger even if the wallpaper is unchanged (the knobs are folded
+> into the idempotency key), so `--force` is never needed after a `config`
+> change.
 
 ---
 
@@ -296,7 +305,7 @@ launchctl print gui/$(id -u)/com.kmurthi.wallpaper-accent | grep -iE 'state|runs
 - **nvim theme is switched to `wallpaper_accent`** (revert = one line in chadrc).
 - `SIGUSR2` = ghostty reload, `SIGUSR1` = nvim. Any other signal crashes ghostty.
 - `pgrep` is unreliable here; process detection uses `ps`.
-- Hardcoded absolute paths (plist → `/opt/homebrew/bin/uv`, home dir). Update if
-  you relocate things.
+- Moved the repo or switched `uv`? Rerun `wallpaper-accent install` — the
+  plist is generated, not hand-edited (see Setup above).
 
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) to fix/extend or add another tool.

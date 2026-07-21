@@ -79,6 +79,24 @@ def _select_seed(quantized):
     return hcts[0]
 
 
+_QUANTIZE_CACHE: dict = {}
+
+
+def _quantize(image: Path):
+    """Quantize an image to its dominant colours — the expensive, knob-INDEPENDENT
+    step. Cached by (path, mtime) so the live `config edit` editor can rebuild the
+    palette on every keystroke without re-reading the image. Seed selection stays
+    outside the cache (it reads CHROMA_FLOOR) so that knob still previews live."""
+    key = (str(image), image.stat().st_mtime)
+    cached = _QUANTIZE_CACHE.get(key)
+    if cached is None:
+        from materialyoucolor.quantize import ImageQuantizeCelebi
+
+        cached = ImageQuantizeCelebi(str(image), 4, 128)
+        _QUANTIZE_CACHE[key] = cached
+    return cached
+
+
 def _accent_seed(seed_hct):
     """Seed handed to the Material scheme (#4 chroma floor / greyscale fallback).
 
@@ -157,7 +175,6 @@ def enforce_contrast(surface: dict, bg: str, dark: bool) -> None:
 
 
 def build_palette(image: Path, dark: bool) -> dict:
-    from materialyoucolor.quantize import ImageQuantizeCelebi
     from materialyoucolor.dynamiccolor.material_dynamic_colors import (
         MaterialDynamicColors,
     )
@@ -174,7 +191,7 @@ def build_palette(image: Path, dark: bool) -> dict:
         "rainbow": SchemeRainbow, "content": SchemeContent,
     }
 
-    quantized = ImageQuantizeCelebi(str(image), 4, 128)
+    quantized = _quantize(image)
     seed_hct = _select_seed(quantized)          # #6 robust seed
     seed = seed_hct.to_int()
     accent_seed = _accent_seed(seed_hct)        # #4 chroma floor / fallback

@@ -109,6 +109,16 @@ $S config unset bg_chroma      # revert to default
 $S theme --force               # apply now (else it applies on the next wallpaper change)
 ```
 
+**Interactive (recommended):** `$S config edit` opens an arrow-key menu of every
+knob. **↑/↓** select a knob, **←/→** change its value, **u** resets it to the
+default, **q** quits. Each change is persisted to `settings.json` **and applied
+live to ghostty** (the palette is rebuilt from the current wallpaper and a
+running ghostty is reloaded via `SIGUSR2`), so you can dial in a look and watch
+it update in real time. On quit, if you changed anything, it asks **`Apply theme
+to all components now? [Y/n]`** — accept to re-theme the rest (fzf, p10k, nvim,
+tmux) too, or decline and they pick the knobs up on the next `theme` run. Needs
+an interactive terminal.
+
 Overrides persist to `~/.local/state/wallpaper-accent/settings.json`. Precedence
 is **env var > settings file > default**, so an env var still wins for a one-off.
 Each `GHOSTTY_ACCENT_<X>` var below maps to the `config` knob `<x>` (e.g.

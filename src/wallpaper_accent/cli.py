@@ -137,6 +137,9 @@ def _config(args: argparse.Namespace) -> int:
         removed = config.unset_knob(args.key)
         print(f"{args.key}: {'reverted to default' if removed else 'was not set'}")
         return 0
+    if action == "edit":
+        from .configtui import run as run_editor
+        return run_editor()
 
     # list (default)
     print(f"\n  wallpaper-accent knobs  (settings: {config.SETTINGS_FILE})\n")
@@ -145,7 +148,8 @@ def _config(args: argparse.Namespace) -> int:
         val = str(config.knob_value(key))
         src = config.knob_source(key)
         print(f"  {key.ljust(kw)}  {val:9} [{src:7}]  {help_}")
-    print("\n  config set <knob> <value>   persist an override")
+    print("\n  config edit                 interactive menu (arrow keys, live ghostty)")
+    print("  config set <knob> <value>   persist an override")
     print("  config unset <knob>         revert to default")
     print("  precedence: env var > settings file > default\n")
     return 0
@@ -184,8 +188,8 @@ def _build_parser() -> argparse.ArgumentParser:
     c = sub.add_parser("config",
                        help="get/set persistent palette knobs (no env vars needed)")
     c.add_argument("config_action", nargs="?", default="list",
-                   choices=["list", "get", "set", "unset"],
-                   help="list (default), get, set, or unset a knob")
+                   choices=["list", "get", "set", "unset", "edit"],
+                   help="list (default), get, set, unset, or edit (interactive) a knob")
     c.add_argument("key", nargs="?", help="knob name (see `config list`)")
     c.add_argument("value", nargs="?", help="new value (for `config set`)")
     return ap

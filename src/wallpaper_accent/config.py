@@ -119,17 +119,26 @@ def _write_settings(settings: dict) -> None:
     atomic_write(SETTINGS_FILE, json.dumps(settings, indent=2, sort_keys=True) + "\n")
 
 
-# Resolved module constants (import-time; each CLI run is a fresh process, so
-# `config set` in one invocation is picked up by the next `theme` run).
-ACCENT_SCHEME = knob_value("scheme")
-BG_TONE = knob_value("bg_tone")
-BG_CHROMA_CAP = knob_value("bg_chroma")
-BLACK_TONE = knob_value("black_tone")
-BLACK_CHROMA_CAP = knob_value("black_chroma")
-MIN_HUE_SEP = knob_value("min_hue_sep")
-CHROMA_FLOOR = knob_value("chroma_floor")
-FALLBACK_HUE = knob_value("fallback_hue")
-FG_MIN_CONTRAST = knob_value("fg_contrast")
+# Knob-derived module constants. Resolved at import (each CLI run is a fresh
+# process, so a `config set` is picked up by the next `theme` run) and re-resolved
+# in-process by `refresh()` — the live `config edit` editor calls it after each
+# edit so changes apply without a new process.
+def refresh() -> None:
+    """(Re)resolve every knob into its module constant from env > file > default."""
+    global ACCENT_SCHEME, BG_TONE, BG_CHROMA_CAP, BLACK_TONE, BLACK_CHROMA_CAP
+    global MIN_HUE_SEP, CHROMA_FLOOR, FALLBACK_HUE, FG_MIN_CONTRAST
+    ACCENT_SCHEME = knob_value("scheme")
+    BG_TONE = knob_value("bg_tone")
+    BG_CHROMA_CAP = knob_value("bg_chroma")
+    BLACK_TONE = knob_value("black_tone")
+    BLACK_CHROMA_CAP = knob_value("black_chroma")
+    MIN_HUE_SEP = knob_value("min_hue_sep")
+    CHROMA_FLOOR = knob_value("chroma_floor")
+    FALLBACK_HUE = knob_value("fallback_hue")
+    FG_MIN_CONTRAST = knob_value("fg_contrast")
+
+
+refresh()
 
 # Non-knob internals (not user-tunable).
 MONOCHROMATIC_SCHEMES = {"tonalspot"}  # nudge the semantic hue, not the accent

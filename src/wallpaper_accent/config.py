@@ -47,7 +47,7 @@ SCHEMES = ("vibrant", "tonalspot", "expressive", "fruitsalad", "rainbow", "conte
 # settings-file key and the tuning_signature key — one registry keeps them in
 # sync. Add a knob here and it is configurable everywhere.
 KNOBS: dict[str, tuple] = {
-    "scheme":       ("GHOSTTY_ACCENT_SCHEME",       str,   "vibrant", "accent harmony (" + ", ".join(SCHEMES) + ")"),
+    "scheme":       ("GHOSTTY_ACCENT_SCHEME",       str,   "content", "accent harmony (" + ", ".join(SCHEMES) + ")"),
     "bg_tone":      ("GHOSTTY_ACCENT_BG_TONE",      float, 14.0,      "background lightness 0-100 (lower = darker)"),
     "bg_chroma":    ("GHOSTTY_ACCENT_BG_CHROMA",    float, 22.0,      "background colourfulness (lower = greyer/less tint)"),
     "black_tone":   ("GHOSTTY_ACCENT_BLACK_TONE",   float, 22.0,      "ANSI 'black' lightness"),
@@ -56,6 +56,7 @@ KNOBS: dict[str, tuple] = {
     "chroma_floor": ("GHOSTTY_ACCENT_CHROMA_FLOOR", float, 12.0,      "seeds duller than this are treated as near-grey"),
     "fallback_hue": ("GHOSTTY_ACCENT_FALLBACK_HUE", float, 210.0,     "accent hue for colourless wallpapers"),
     "fg_contrast":  ("GHOSTTY_ACCENT_FG_CONTRAST",  float, 4.5,       "min WCAG contrast of foreground over background"),
+    "secondary_spread": ("GHOSTTY_ACCENT_SECONDARY_SPREAD", float, 40.0, "deg to rotate secondary off primary for 3 distinct accent hues (0 disables)"),
 }
 _MISSING = object()
 
@@ -126,7 +127,7 @@ def _write_settings(settings: dict) -> None:
 def refresh() -> None:
     """(Re)resolve every knob into its module constant from env > file > default."""
     global ACCENT_SCHEME, BG_TONE, BG_CHROMA_CAP, BLACK_TONE, BLACK_CHROMA_CAP
-    global MIN_HUE_SEP, CHROMA_FLOOR, FALLBACK_HUE, FG_MIN_CONTRAST
+    global MIN_HUE_SEP, CHROMA_FLOOR, FALLBACK_HUE, FG_MIN_CONTRAST, SECONDARY_SPREAD
     ACCENT_SCHEME = knob_value("scheme")
     BG_TONE = knob_value("bg_tone")
     BG_CHROMA_CAP = knob_value("bg_chroma")
@@ -136,6 +137,7 @@ def refresh() -> None:
     CHROMA_FLOOR = knob_value("chroma_floor")
     FALLBACK_HUE = knob_value("fallback_hue")
     FG_MIN_CONTRAST = knob_value("fg_contrast")
+    SECONDARY_SPREAD = knob_value("secondary_spread")
 
 
 refresh()
@@ -145,7 +147,7 @@ MONOCHROMATIC_SCHEMES = {"tonalspot"}  # nudge the semantic hue, not the accent
 GREY_HUE_CHROMA = 5.0                   # below this a seed's hue is meaningless
 FG_VARIANT_MIN_CONTRAST = 3.0
 REPORT_DE_THRESHOLD = 12.0              # ΔE below which collision_report flags a role
-ENGINE_VERSION = 2                      # bump when the palette math changes
+ENGINE_VERSION = 3                      # bump when the palette math changes
 
 # Enabled components, in run order. Edit this list to disable a tool, or set
 # WALLPAPER_ACCENT_COMPONENTS="ghostty,fzf" to override at runtime.
@@ -170,6 +172,7 @@ def tuning_signature() -> dict:
         "black_tone": BLACK_TONE, "black_chroma": BLACK_CHROMA_CAP,
         "min_hue_sep": MIN_HUE_SEP, "chroma_floor": CHROMA_FLOOR,
         "fallback_hue": FALLBACK_HUE, "fg_contrast": FG_MIN_CONTRAST,
+        "secondary_spread": SECONDARY_SPREAD,
         "components": enabled_component_names(),
     }
 

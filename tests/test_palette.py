@@ -81,4 +81,4 @@ def test_syntax_hues_stay_fixed_catppuccin(blue_wallpaper):
     assert b16["base08"] == c["red"]
     assert b16["base0B"] == c["green"]
     assert b16["base0D"] == c["blue"]
-    assert b16["base0F"] == c["flamingo"]
+    assert b16["base0F"] == c["pink"]

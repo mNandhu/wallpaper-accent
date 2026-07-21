@@ -26,7 +26,7 @@ from .color import contrast_ratio, delta_e, nearest_allowed_hue
 # accent). slot -> Catppuccin key. base00..base07 are tinted neutrals, not here.
 SEMANTIC_SLOTS = {
     "base08": "red", "base09": "peach", "base0A": "yellow", "base0B": "green",
-    "base0C": "teal", "base0D": "blue", "base0E": "mauve", "base0F": "flamingo",
+    "base0C": "teal", "base0D": "blue", "base0E": "mauve", "base0F": "pink",
 }
 
 
@@ -135,6 +135,25 @@ def repel_accent(accent: dict, semantic_hues: list[float], sep: float) -> None:
         for m in members:
             c = _hct(accent[m])
             accent[m] = _hex_from_hct(c.hue + delta, c.chroma, c.tone)
+
+
+def spread_secondary(accent: dict, offset: float) -> None:
+    """Rotate the secondary role group to a fixed hue offset from primary.
+
+    Material's spread schemes tie `secondary` to the primary hue (a desaturated
+    sibling), so without this the accent is really two hue families (primary +
+    tertiary), not three. Rotating the whole secondary group by one shared delta
+    — same coherent-group technique as `repel_accent` — yields a genuinely
+    tri-hue accent. Runs before `repel_accent`, which then de-conflicts the
+    rotated hue from the fixed syntax hues, so the invariant still holds."""
+    members = ("secondary", "on_secondary", "secondary_container", "on_secondary_container")
+    target = (_hct(accent["primary"]).hue + offset) % 360.0
+    delta = _signed_delta(_hct(accent["secondary"]).hue, target)
+    if abs(delta) < 1e-6:
+        return
+    for m in members:
+        c = _hct(accent[m])
+        accent[m] = _hex_from_hct(c.hue + delta, c.chroma, c.tone)
 
 
 def nudge_semantics(base16: dict, accent_hues: list[float], sep: float) -> None:
@@ -248,6 +267,8 @@ def build_palette(image: Path, dark: bool) -> dict:
     # the single-hue accent aesthetic survives.
     semantic_hues = [_hct(config.CATPPUCCIN[n]).hue for n in SEMANTIC_SLOTS.values()]
     monochromatic = config.ACCENT_SCHEME in config.MONOCHROMATIC_SCHEMES
+    if config.SECONDARY_SPREAD > 0 and not monochromatic:
+        spread_secondary(accent, config.SECONDARY_SPREAD)
     if config.MIN_HUE_SEP > 0 and not monochromatic:
         repel_accent(accent, semantic_hues, config.MIN_HUE_SEP)
 
@@ -283,7 +304,7 @@ def build_palette(image: Path, dark: bool) -> dict:
         "base0C": c["teal"],
         "base0D": c["blue"],
         "base0E": c["mauve"],
-        "base0F": c["flamingo"],
+        "base0F": c["pink"],
     }
     if config.MIN_HUE_SEP > 0 and monochromatic:
         accent_hues = [_hct(accent[k]).hue for k in ("primary", "secondary", "tertiary")]

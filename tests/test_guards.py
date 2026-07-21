@@ -21,6 +21,7 @@ from wallpaper_accent.palette import (
     collision_report,
     enforce_contrast,
     nudge_semantics,
+    spread_secondary,
     repel_accent,
 )
 
@@ -85,6 +86,26 @@ def test_repel_rotates_role_group_coherently():
     d_cont = hue_distance(cont_before, cont_after)
     assert d_base > 1e-6
     assert d_base == pytest.approx(d_cont, abs=1.0)
+
+
+# --- spread_secondary -----------------------------------------------------
+
+
+def test_spread_secondary_rotates_group_to_offset_from_primary():
+    # Scheme collapses secondary onto primary's hue; spread must push it to
+    # primary + offset so the accent is genuinely tri-hue.
+    accent = _accent(120.0, 120.0, 220.0)
+    offset = 40.0
+    spread_secondary(accent, offset)
+    p = _hct(accent["primary"]).hue
+    s = _hct(accent["secondary"]).hue
+    assert hue_distance(s, (p + offset) % 360.0) <= HCT_SLACK
+    # Whole group tracks one shared delta.
+    for m in ("on_secondary", "secondary_container", "on_secondary_container"):
+        assert hue_distance(_hct(accent[m]).hue, s) <= HCT_SLACK
+    # Primary and tertiary are untouched.
+    assert hue_distance(_hct(accent["primary"]).hue, 120.0) <= HCT_SLACK
+    assert hue_distance(_hct(accent["tertiary"]).hue, 220.0) <= HCT_SLACK
 
 
 # --- nudge_semantics ------------------------------------------------------

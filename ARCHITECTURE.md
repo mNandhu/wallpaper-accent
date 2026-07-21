@@ -127,7 +127,7 @@ pal = {
 `colors.json` persists `source, seed, scheme, dark, accent, surface, base16`.
 
 **Color model.** `materialyoucolor` scores the image → seed → a Material scheme
-(default `SchemeVibrant`; `ACCENT_SCHEME`) → `MaterialDynamicColors` roles. The
+(default `SchemeContent`; `ACCENT_SCHEME`) → `MaterialDynamicColors` roles. The
 scheme derives a **harmony**: primary/secondary/tertiary at rotated hues (how one
 brand color becomes a varied-but-cohesive palette; `tonalspot` = monochromatic,
 `vibrant` = spread). Backgrounds/greys are **not** Material's near-neutral
@@ -136,9 +136,12 @@ brand color becomes a varied-but-cohesive palette; `tonalspot` = monochromatic,
 
 **THE INVARIANT (do not break):** accent → surfaces, greys, cursor, selection,
 accent-y UI, and it is **spread across primary/secondary/tertiary** so nothing is
-monochromatic. **Semantic + syntax hues are fixed** (`CATPPUCCIN` / base16
-`base08..base0F`), never the accent — keeps logs/diffs/`ls`/code legible. Every
-emitter honors this (e.g. `emit_zsh_syntax` uses only base16, never the accent).
+monochromatic (the `spread_secondary` guard rotates secondary off primary so
+schemes that tie them still yield three distinct hues). **Semantic + syntax hues
+are fixed** (`CATPPUCCIN` / base16 `base08..base0F`), never the accent — keeps
+logs/diffs/`ls`/code legible. Every emitter honors this: `emit_zsh_syntax` uses
+only base16, and `emit_ghostty` maps ANSI 1–6/9–14 to the fixed base16 semantic
+hues (never the accent), so terminal `ls`/`git` stay a legible full spectrum.
 
 **Palette guards** (`palette.py`, all off `MIN_HUE_SEP`/`CHROMA_FLOOR`/… knobs;
 pure colour math in `color.py`). Run inside `build_palette` to keep the invariant
@@ -148,7 +151,9 @@ usable on adversarial wallpapers:
 2. **Chroma floor / greyscale fallback** — `_accent_seed` lifts a dull seed's
    chroma; if the hue is meaningless (chroma < `GREY_HUE_CHROMA`) it substitutes
    `FALLBACK_HUE` (210, in the wide teal→blue gap). Neutrals keep the real seed.
-3. **Hue de-confliction** — spread schemes `repel_accent` (rotate each role group
+3. **Hue de-confliction** — spread schemes first `spread_secondary` (rotate the
+   secondary group to a fixed `SECONDARY_SPREAD`° off primary for three hues),
+   then `repel_accent` (rotate each role group
    ≥ `MIN_HUE_SEP`° off every fixed syntax hue via `nearest_allowed_hue`);
    `tonalspot` (see `MONOCHROMATIC_SCHEMES`) instead `nudge_semantics` (move the
    colliding base08-0F hue off the accent, preserving the single-hue accent).
@@ -165,9 +170,10 @@ usable on adversarial wallpapers:
 help), so the same name is the settings-file key, the `tuning_signature` key, and
 the `config` subcommand key. Each resolves **env var > settings file > default**
 (`config.knob_value`/`knob_source`; `set_knob`/`unset_knob` persist to
-`SETTINGS_FILE`). Current knobs: `scheme` (`vibrant`), `bg_tone` (14), `bg_chroma`
+`SETTINGS_FILE`). Current knobs: `scheme` (`content`), `bg_tone` (14), `bg_chroma`
 (22), `black_tone` (22), `black_chroma` (18), `min_hue_sep` (20), `chroma_floor`
-(12), `fallback_hue` (210), `fg_contrast` (4.5) — env vars are `GHOSTTY_ACCENT_<X>`.
+(12), `fallback_hue` (210), `fg_contrast` (4.5), `secondary_spread` (40) — env
+vars are `GHOSTTY_ACCENT_<X>`.
 All are folded into the idempotency key (`tuning_signature()`) with
 `ENGINE_VERSION`, so changing one re-themes without `--force`. To add a knob, add
 one `KNOBS` row and one resolved constant — CLI/config/signature pick it up.

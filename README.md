@@ -44,7 +44,7 @@ fragment and, if it can, reloads running instances. See
 
 | App | What follows the accent | Reload of running instances |
 |---|---|---|
-| **ghostty** | bg, fg, cursor, selection, greys | **live** — `SIGUSR2` |
+| **ghostty** | bg, fg, cursor, selection, greys, ANSI 1–15 (semantic hues fixed) | **live** — `SIGUSR2` |
 | **nvim** (NvChad) | UI surfaces, statusline, popup, greys; syntax fixed | **live** — `SIGUSR1` autocmd |
 | **fzf** | prompt/pointer/hl/bg+/border | new shells |
 | **p10k** | directory path + prompt char | new shells |
@@ -125,11 +125,13 @@ Each `GHOSTTY_ACCENT_<X>` var below maps to the `config` knob `<x>` (e.g.
 `GHOSTTY_ACCENT_BG_CHROMA` → `bg_chroma`, `GHOSTTY_ACCENT_MIN_HUE_SEP` → `min_hue_sep`).
 
 **Harmony** — how varied the accent is (one wallpaper color → primary + secondary
-+ tertiary; the scheme sets how far apart their hues are).
++ tertiary). The scheme sets the base spread; `secondary_spread` then forces
+secondary onto its own hue so the accent is three distinct colors, not two.
 
 | Var | Default | Effect |
 |---|---|---|
-| `GHOSTTY_ACCENT_SCHEME` | `vibrant` | `vibrant` (distinct hues), `tonalspot` (monochromatic — one hue), `expressive`, `fruitsalad`, `rainbow`, `content` |
+| `GHOSTTY_ACCENT_SCHEME` | `content` | `content` (wide, distinct hues), `vibrant`, `tonalspot` (monochromatic — one hue), `expressive`, `fruitsalad`, `rainbow` |
+| `GHOSTTY_ACCENT_SECONDARY_SPREAD` | `40` | hue° to rotate secondary off primary for a genuinely tri-hue accent. `0` keeps the scheme's native (often 2-hue) spread. |
 
 **Tint** — HCT: **tone** = lightness (0–100), **chroma** = colorfulness.
 

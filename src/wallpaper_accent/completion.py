@@ -97,7 +97,7 @@ _wallpaper_accent() {{
             ;;
     esac
 }}
-_wallpaper_accent "$@"
+compdef _wallpaper_accent wallpaper-accent
 """
 
 

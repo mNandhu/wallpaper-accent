@@ -200,8 +200,8 @@ def run() -> int:
 
         from .cli import _theme
         return _theme(argparse.Namespace(
-            show=False, image=None, dark=dark, light=not dark,
-            force=True, no_reload=False, only=None, to_stdout=False,
+            show=False, undo=False, image=None, dark=dark, light=not dark,
+            force=True, no_reload=False, only=None, skip=None, to_stdout=False,
         ))
     print("all components pick up these knobs on the next `theme` run "
           "(ghostty was already live-updated).")
